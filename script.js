@@ -1,209 +1,149 @@
-let campaigns = JSON.parse(localStorage.getItem("campaigns")) || [];
-let currentCampaignIndex = null;
-let editingNoteIndex = null;
+// ===== Campaign Chronicle PRO SaaS Edition =====
 
-/* ===== DATA MIGRATION ===== */
-campaigns = campaigns.map(c => ({
-  name: c.name || "Untitled",
-  notes: c.notes || [],
-  reviews: c.reviews || []
-}));
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 
-saveData();
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  setDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
-/* ===== SAVE ===== */
-function saveData() {
-  localStorage.setItem("campaigns", JSON.stringify(campaigns));
-}
+// ===== Firebase Config =====
+const firebaseConfig = {
+  apiKey: "AIzaSyDka78iWPf69fShIaS1uVOnKBx0UyoRUeY",
+  authDomain: "campaign-chronicle-pro.firebaseapp.com",
+  projectId: "campaign-chronicle-pro",
+  storageBucket: "campaign-chronicle-pro.firebasestorage.app",
+  messagingSenderId: "390100005209",
+  appId: "1:390100005209:web:725840a61a273bc9aa1c48"
+};
 
-/* ===== HOME ===== */
-function renderCampaigns() {
-  const list = document.getElementById("campaignList");
-  list.innerHTML = "";
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
-  campaigns.forEach((c, i) => {
-    list.innerHTML += `
-      <strong>${c.name}</strong>
-      <button onclick="openCampaign(${i})">Open</button>
-      <button onclick="deleteCampaign(${i})">Delete</button>
-      <hr>
-    `;
-  });
-}
+let currentCampaignId = null;
+let currentUser = null;
 
-function createCampaign() {
+/* ===== AUTH SYSTEM ===== */
+
+window.register = async function () {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  await createUserWithEmailAndPassword(auth, email, password);
+};
+
+window.login = async function () {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  await signInWithEmailAndPassword(auth, email, password);
+};
+
+window.logout = async function () {
+  await signOut(auth);
+};
+
+onAuthStateChanged(auth, user => {
+  if (user) {
+    currentUser = user;
+    document.getElementById("authSection").classList.add("hidden");
+    document.getElementById("appSection").classList.remove("hidden");
+    loadCampaigns();
+  } else {
+    document.getElementById("authSection").classList.remove("hidden");
+    document.getElementById("appSection").classList.add("hidden");
+  }
+});
+
+/* ===== CAMPAIGNS ===== */
+
+window.createCampaign = async function () {
   const name = prompt("Campaign name?");
   if (!name) return;
 
-  campaigns.push({ name, notes: [], reviews: [] });
-  saveData();
-  renderCampaigns();
+  await addDoc(collection(db, "campaigns"), {
+    name,
+    ownerId: currentUser.uid,
+    members: [],
+    createdAt: new Date()
+  });
+};
+
+function loadCampaigns() {
+  onSnapshot(collection(db, "campaigns"), snapshot => {
+    const list = document.getElementById("campaignList");
+    list.innerHTML = "";
+
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+
+      if (data.ownerId === currentUser.uid || data.members.includes(currentUser.uid)) {
+        list.innerHTML += `
+          <strong>${data.name}</strong>
+          <button onclick="openCampaign('${docSnap.id}')">Open</button>
+          <hr>
+        `;
+      }
+    });
+  });
 }
 
-function deleteCampaign(i) {
-  campaigns.splice(i, 1);
-  saveData();
-  renderCampaigns();
-}
+/* ===== OPEN CAMPAIGN ===== */
 
-/* ===== OPEN ===== */
-function openCampaign(i) {
-  currentCampaignIndex = i;
-  document.getElementById("home").classList.add("hidden");
-  document.getElementById("campaignView").classList.remove("hidden");
-  document.getElementById("campaignTitle").innerText = campaigns[i].name;
-  renderNotes();
-  renderReviews();
-}
-
-function goHome() {
-  document.getElementById("campaignView").classList.add("hidden");
-  document.getElementById("home").classList.remove("hidden");
-}
-
-/* ===== TABS ===== */
-function showSection(id) {
-  document.querySelectorAll(".section").forEach(s => s.classList.add("hidden"));
-  document.getElementById(id).classList.remove("hidden");
-}
+window.openCampaign = function (id) {
+  currentCampaignId = id;
+  loadNotes();
+};
 
 /* ===== NOTES ===== */
-function renderNotes() {
-  const campaign = campaigns[currentCampaignIndex];
-  const div = document.getElementById("notes");
 
-  div.innerHTML = `
-    <input id="noteTitle" placeholder="Session Title">
-    <textarea id="noteText" placeholder="Write session notes..."></textarea>
-    <button onclick="saveNote()">Save</button>
-    <button onclick="spiceSession()">🔥 Make Interesting</button>
-    <div id="spiceBox"></div>
-    <hr>
-  `;
-
-  campaign.notes.forEach((n, i) => {
-    div.innerHTML += `
-      <div class="note-card">
-        <h3>${n.title}</h3>
-        <p>${n.text}</p>
-        <button onclick="editNote(${i})">Edit</button>
-        <button onclick="deleteNote(${i})">Delete</button>
-      </div>
+function loadNotes() {
+  onSnapshot(collection(db, "campaigns", currentCampaignId, "notes"), snapshot => {
+    const div = document.getElementById("notes");
+    div.innerHTML = `
+      <input id="noteTitle" placeholder="Session Title">
+      <textarea id="noteText" placeholder="Write notes..."></textarea>
+      <button onclick="saveNote()">Save</button>
+      <hr>
     `;
+
+    snapshot.forEach(docSnap => {
+      const note = docSnap.data();
+      div.innerHTML += `
+        <div class="note-card">
+          <h3>${note.title}</h3>
+          <p>${note.text}</p>
+          <button onclick="deleteNote('${docSnap.id}')">Delete</button>
+        </div>
+      `;
+    });
   });
 }
 
-function saveNote() {
-  const title = document.getElementById("noteTitle").value.trim();
-  const text = document.getElementById("noteText").value.trim();
-  if (!title || !text) return;
+window.saveNote = async function () {
+  const title = document.getElementById("noteTitle").value;
+  const text = document.getElementById("noteText").value;
 
-  campaigns[currentCampaignIndex].notes.push({ title, text });
-  saveData();
-  renderNotes();
-}
-
-function editNote(i) {
-  const n = campaigns[currentCampaignIndex].notes[i];
-  document.getElementById("noteTitle").value = n.title;
-  document.getElementById("noteText").value = n.text;
-  campaigns[currentCampaignIndex].notes.splice(i, 1);
-  saveData();
-  renderNotes();
-}
-
-function deleteNote(i) {
-  campaigns[currentCampaignIndex].notes.splice(i, 1);
-  saveData();
-  renderNotes();
-}
-
-function spiceSession() {
-  const campaign = campaigns[currentCampaignIndex];
-  const box = document.getElementById("spiceBox");
-
-  if (!campaign.notes.length) {
-    box.innerText = "Write a session first.";
-    return;
-  }
-
-  const text = campaign.notes[campaign.notes.length - 1].text.toLowerCase();
-
-  if (text.includes("fight")) {
-    box.innerText = "Add a third faction to interrupt the battle.";
-  } else {
-    box.innerText = "Raise the stakes with a ticking clock.";
-  }
-}
-
-/* ===== REVIEWS ===== */
-function addReview() {
-  const text = document.getElementById("reviewInput").value.trim();
-  if (!text) return;
-
-  campaigns[currentCampaignIndex].reviews.push(text);
-  saveData();
-  renderReviews();
-}
-
-function renderReviews() {
-  const div = document.getElementById("reviewList");
-  div.innerHTML = "";
-
-  campaigns[currentCampaignIndex].reviews.forEach(r => {
-    div.innerHTML += `<div class="note-card">${r}</div>`;
+  await addDoc(collection(db, "campaigns", currentCampaignId, "notes"), {
+    title,
+    text,
+    createdAt: new Date()
   });
-}
+};
 
-/* ===== BACKSTORY ===== */
-function generateBackstoryPrompt() {
-  const prompts = [
-    "What trauma shaped your character?",
-    "Who do they secretly hate?",
-    "What is their greatest regret?"
-  ];
-  document.getElementById("backstoryPrompt").innerText =
-    prompts[Math.floor(Math.random() * prompts.length)];
-}
-
-/* ===== SUMMARIZER ===== */
-function summarizeFile() {
-  const file = document.getElementById("fileInput").files[0];
-  const output = document.getElementById("summaryOutput");
-
-  if (!file) {
-    output.innerText = "Upload a file.";
-    return;
-  }
-
-  if (file.type === "application/pdf") {
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      const typedarray = new Uint8Array(e.target.result);
-
-      pdfjsLib.getDocument(typedarray).promise.then(pdf => {
-        pdf.getPage(1).then(page => {
-          page.getTextContent().then(content => {
-            const text = content.items.map(item => item.str).join(" ");
-            output.innerText = simpleSummarize(text);
-          });
-        });
-      });
-    };
-    reader.readAsArrayBuffer(file);
-  } else {
-    const reader = new FileReader();
-    reader.onload = e => {
-      output.innerText = simpleSummarize(e.target.result);
-    };
-    reader.readAsText(file);
-  }
-}
-
-function simpleSummarize(text) {
-  const sentences = text.split(".");
-  return sentences.slice(0, 3).join(".") + ".";
-}
-
-/* ===== INIT ===== */
-renderCampaigns();
+window.deleteNote = async function (noteId) {
+  await deleteDoc(doc(db, "campaigns", currentCampaignId, "notes", noteId));
+};
