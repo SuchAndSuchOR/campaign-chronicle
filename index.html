@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Campaign Chronicle Pro</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <h1>🎲 Campaign Chronicle</h1>
+</header>
+
+<div id="authSection" class="auth-box">
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <button id="registerBtn">Register</button>
+  <button id="loginBtn">Login</button>
+</div>
+
+<div id="appLayout" class="hidden app-layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <div class="sidebar-top">
+      <h2>Campaigns</h2>
+      <button id="newCampaignBtn">+ New</button>
+    </div>
+
+    <div id="campaignList" class="campaign-list"></div>
+
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-area">
+
+    <div class="topbar">
+
+      <div>
+        <h2 id="campaignTitle">Select a Campaign</h2>
+        <div id="typingIndicator"></div>
+      </div>
+
+      <div class="topbar-actions">
+        <button id="settingsBtn">⚙ Settings</button>
+        <button id="logoutBtn">Logout</button>
+      </div>
+
+    </div>
+
+    <div class="editor-layout">
+
+      <!-- Editor -->
+      <div class="editor-panel">
+
+        <textarea id="noteText"
+          placeholder="Write your session notes here..."></textarea>
+
+        <div class="editor-actions">
+          <button id="saveNoteBtn">Save</button>
+          <button id="fireBtn" class="fire-btn">🔥 Fire Idea</button>
+        </div>
+
+        <div id="notes" class="notes-feed"></div>
+
+      </div>
+
+      <!-- Presence Panel -->
+      <div class="presence-panel">
+
+        <h3>Active Players</h3>
+        <div id="presenceList"></div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+<script type="module" src="./js/main.js"></script>
+
+</body>
+</html>

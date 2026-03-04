@@ -1,0 +1,164 @@
+body{
+background:#0f0f14;
+color:white;
+font-family:Segoe UI,Arial,sans-serif;
+margin:0;
+}
+
+/* Header */
+
+.app-header{
+padding:15px 25px;
+background:#12121a;
+border-bottom:1px solid #222;
+}
+
+.app-header h1{
+margin:0;
+color:#e6c36f;
+}
+
+/* Layout */
+
+.app-layout{
+display:flex;
+height:calc(100vh - 60px);
+}
+
+/* Sidebar */
+
+.sidebar{
+width:260px;
+background:#14141c;
+border-right:1px solid #222;
+padding:20px;
+display:flex;
+flex-direction:column;
+}
+
+.sidebar-top{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:15px;
+}
+
+.campaign-list div{
+padding:10px;
+border-radius:6px;
+margin-bottom:6px;
+cursor:pointer;
+background:#1c1c26;
+}
+
+.campaign-list div:hover{
+background:#262636;
+}
+
+/* Main Area */
+
+.main-area{
+flex:1;
+display:flex;
+flex-direction:column;
+padding:20px;
+}
+
+/* Topbar */
+
+.topbar{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:20px;
+}
+
+.topbar-actions button{
+margin-left:8px;
+}
+
+/* Editor Layout */
+
+.editor-layout{
+display:flex;
+gap:20px;
+height:100%;
+}
+
+/* Editor Panel */
+
+.editor-panel{
+flex:3;
+display:flex;
+flex-direction:column;
+}
+
+textarea{
+background:#1f1f29;
+color:white;
+border:none;
+border-radius:6px;
+padding:12px;
+height:180px;
+resize:none;
+margin-bottom:10px;
+}
+
+.editor-actions{
+margin-bottom:15px;
+}
+
+.notes-feed{
+background:#181820;
+padding:10px;
+border-radius:6px;
+overflow:auto;
+}
+
+/* Presence */
+
+.presence-panel{
+flex:1;
+background:#181820;
+border-radius:6px;
+padding:15px;
+}
+
+/* Buttons */
+
+button{
+background:#2b2b38;
+color:white;
+border:none;
+padding:6px 10px;
+border-radius:6px;
+cursor:pointer;
+}
+
+button:hover{
+background:#3b3b4a;
+}
+
+.fire-btn{
+background:linear-gradient(45deg,#ff4500,#ff8c00);
+}
+
+.hidden{
+display:none;
+}
+
+/* Auth */
+
+.auth-box{
+padding:30px;
+}
+
+input{
+display:block;
+margin-bottom:10px;
+padding:8px;
+background:#1f1f29;
+border:none;
+color:white;
+border-radius:6px;
+}
