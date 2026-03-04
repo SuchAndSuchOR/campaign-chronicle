@@ -147,3 +147,4 @@ window.saveNote = async function () {
 window.deleteNote = async function (noteId) {
   await deleteDoc(doc(db, "campaigns", currentCampaignId, "notes", noteId));
 };
+
