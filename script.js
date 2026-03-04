@@ -1,6 +1,5 @@
-// ===== Campaign Chronicle PRO SaaS Edition =====
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -15,12 +14,15 @@ import {
   addDoc,
   doc,
   deleteDoc,
+  updateDoc,
   onSnapshot,
   query,
-  where
+  where,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
-// ===== Firebase Config =====
+/* ================= FIREBASE CONFIG ================= */
+
 const firebaseConfig = {
   apiKey: "AIzaSyDka78iWPf69fShIaS1uVOnKBx0UyoRUeY",
   authDomain: "campaign-chronicle-pro.firebaseapp.com",
@@ -34,10 +36,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-let currentCampaignId = null;
 let currentUser = null;
+let currentCampaignId = null;
 
-/* ===== AUTH SYSTEM ===== */
+/* ================= AUTH ================= */
 
 window.register = async function () {
   const email = document.getElementById("email").value;
@@ -55,11 +57,12 @@ window.logout = async function () {
   await signOut(auth);
 };
 
-onAuthStateChanged(auth, user => {
+onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUser = user;
     document.getElementById("authSection").classList.add("hidden");
     document.getElementById("appSection").classList.remove("hidden");
+    await checkJoinLink();
     loadCampaigns();
   } else {
     document.getElementById("authSection").classList.remove("hidden");
@@ -67,7 +70,7 @@ onAuthStateChanged(auth, user => {
   }
 });
 
-/* ===== CAMPAIGNS ===== */
+/* ================= CAMPAIGNS ================= */
 
 window.createCampaign = async function () {
   const name = prompt("Campaign name?");
@@ -75,8 +78,10 @@ window.createCampaign = async function () {
 
   await addDoc(collection(db, "campaigns"), {
     name,
+    description: "",
     ownerId: currentUser.uid,
     members: [],
+    shareCode: Math.random().toString(36).substring(2, 8),
     createdAt: new Date()
   });
 };
@@ -87,67 +92,139 @@ function loadCampaigns() {
     where("ownerId", "==", currentUser.uid)
   );
 
-  onSnapshot(q, snapshot => {
+  onSnapshot(q, (snapshot) => {
     const list = document.getElementById("campaignList");
     list.innerHTML = "";
 
-    snapshot.forEach(docSnap => {
+    snapshot.forEach((docSnap) => {
       const data = docSnap.data();
 
       list.innerHTML += `
-        <strong>${data.name}</strong>
-        <button onclick="openCampaign('${docSnap.id}')">Open</button>
+        <div>
+          <strong>${data.name}</strong>
+          <button onclick="openCampaign('${docSnap.id}', '${data.name}')">Open</button>
+          <button onclick="editCampaign('${docSnap.id}')">Edit</button>
+          <button onclick="shareCampaign('${data.shareCode}')">Share</button>
+        </div>
         <hr>
       `;
     });
   });
 }
 
-/* ===== OPEN CAMPAIGN ===== */
+window.editCampaign = async function (id) {
+  const newName = prompt("New campaign name?");
+  if (!newName) return;
 
-window.openCampaign = function (id) {
+  await updateDoc(doc(db, "campaigns", id), {
+    name: newName
+  });
+};
+
+window.shareCampaign = function (code) {
+  const link = `${window.location.origin}${window.location.pathname}?join=${code}`;
+  prompt("Share this link:", link);
+};
+
+async function checkJoinLink() {
+  const params = new URLSearchParams(window.location.search);
+  const joinCode = params.get("join");
+  if (!joinCode || !currentUser) return;
+
+  const snapshot = await getDocs(collection(db, "campaigns"));
+
+  snapshot.forEach(async (docSnap) => {
+    const data = docSnap.data();
+    if (data.shareCode === joinCode) {
+      if (!data.members.includes(currentUser.uid)) {
+        await updateDoc(doc(db, "campaigns", docSnap.id), {
+          members: [...data.members, currentUser.uid]
+        });
+      }
+    }
+  });
+}
+
+/* ================= OPEN CAMPAIGN ================= */
+
+window.openCampaign = function (id, name) {
   currentCampaignId = id;
+  document.getElementById("campaignArea").classList.remove("hidden");
+  document.getElementById("campaignTitle").innerText = name;
   loadNotes();
 };
 
-/* ===== NOTES ===== */
+/* ================= NOTES ================= */
 
 function loadNotes() {
-  onSnapshot(collection(db, "campaigns", currentCampaignId, "notes"), snapshot => {
-    const div = document.getElementById("notes");
-    div.innerHTML = `
-      <input id="noteTitle" placeholder="Session Title">
-      <textarea id="noteText" placeholder="Write notes..."></textarea>
-      <button onclick="saveNote()">Save</button>
-      <hr>
-    `;
+  onSnapshot(
+    collection(db, "campaigns", currentCampaignId, "notes"),
+    (snapshot) => {
+      const div = document.getElementById("notes");
+      div.innerHTML = "";
 
-    snapshot.forEach(docSnap => {
-      const note = docSnap.data();
-      div.innerHTML += `
-        <div class="note-card">
-          <h3>${note.title}</h3>
-          <p>${note.text}</p>
-          <button onclick="deleteNote('${docSnap.id}')">Delete</button>
-        </div>
-      `;
-    });
-  });
+      snapshot.forEach((docSnap) => {
+        const note = docSnap.data();
+
+        div.innerHTML += `
+          <div>
+            <h4>${note.title}</h4>
+            <p>${note.text}</p>
+            <button onclick="deleteNote('${docSnap.id}')">Delete</button>
+          </div>
+          <hr>
+        `;
+      });
+    }
+  );
 }
 
 window.saveNote = async function () {
   const title = document.getElementById("noteTitle").value;
   const text = document.getElementById("noteText").value;
+  if (!title || !text) return;
 
   await addDoc(collection(db, "campaigns", currentCampaignId, "notes"), {
     title,
     text,
     createdAt: new Date()
   });
+
+  document.getElementById("noteTitle").value = "";
+  document.getElementById("noteText").value = "";
 };
 
 window.deleteNote = async function (noteId) {
   await deleteDoc(doc(db, "campaigns", currentCampaignId, "notes", noteId));
 };
 
+/* ================= BACKSTORY ================= */
 
+window.generateBackstoryPrompt = function () {
+  const prompts = [
+    "What secret are they hiding?",
+    "Who betrayed them?",
+    "What oath binds them?",
+    "What do they fear most?",
+    "Who would they die for?"
+  ];
+
+  document.getElementById("backstoryPrompt").innerText =
+    prompts[Math.floor(Math.random() * prompts.length)];
+};
+
+/* ================= SUMMARIZER ================= */
+
+window.summarizeFile = function () {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const sentences = text.split(".");
+    document.getElementById("summaryOutput").innerText =
+      sentences.slice(0, 3).join(".") + ".";
+  };
+  reader.readAsText(file);
+};
