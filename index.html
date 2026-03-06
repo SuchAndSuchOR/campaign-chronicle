@@ -14,48 +14,38 @@
 
 <body>
 
-<!-- ======================
-     AUTH SECTION
-====================== -->
+<!-- AUTH -->
 
-<div id="authSection" class="auth-box">
+<div id="authSection">
 
 <h1>🎲 Campaign Chronicle</h1>
 
 <input id="email" placeholder="Email">
 <input id="password" type="password" placeholder="Password">
 
-<div class="auth-buttons">
 <button id="registerBtn">Register</button>
 <button id="loginBtn">Login</button>
-</div>
 
 </div>
 
 
-<!-- ======================
-     APP LAYOUT
-====================== -->
+<!-- MAIN APP -->
 
 <div id="appLayout" class="hidden">
 
 <header>
 
-<h1>🎲 Campaign Chronicle</h1>
+<h1>Campaign Chronicle</h1>
 
-<button id="settingsBtn">⚙ Settings</button>
+<button id="settingsBtn">Settings</button>
 
 </header>
 
 
-<!-- ======================
-     MAIN CONTENT
-====================== -->
-
-<div class="main-container">
+<div class="layout">
 
 
-<!-- ===== LEFT PANEL ===== -->
+<!-- CAMPAIGN LIST -->
 
 <div class="sidebar">
 
@@ -68,24 +58,21 @@
 </div>
 
 
-<!-- ===== RIGHT PANEL ===== -->
+<!-- MAIN CONTENT -->
 
 <div class="content">
 
+<h2 id="campaignTitle">Open a campaign</h2>
 
-<h2 id="campaignTitle">Open a Campaign</h2>
+<div class="buttons">
 
-
-<div class="top-buttons">
-
-<button id="inviteBtn">Invite Players</button>
+<button id="inviteBtn">Invite</button>
 
 <button id="characterBtn">Character Idea</button>
 
 <button id="fireBtn">🔥 Story Idea</button>
 
 </div>
-
 
 <div id="characterIdea"></div>
 
@@ -95,10 +82,6 @@
 <hr>
 
 
-<!-- ======================
-     NOTES
-====================== -->
-
 <h3>Session Notes</h3>
 
 <textarea id="noteText" placeholder="Write session notes..."></textarea>
@@ -107,30 +90,35 @@
 <hr>
 
 
-<!-- ======================
-     MAP SYSTEM
-====================== -->
-
 <h3>Campaign Map</h3>
 
 <input type="file" id="mapUpload">
 
-<br><br>
+<div id="mapContainer">
 
-<img id="mapPreview" style="max-width:100%;">
+<img id="mapImage">
+
+<canvas id="mapCanvas"></canvas>
+
+</div>
+
+<div class="mapTools">
+
+<button id="drawTool">Draw</button>
+<button id="tokenTool">Token</button>
+<button id="fogTool">Fog</button>
+<button id="markerTool">Marker</button>
+<button id="clearTool">Clear</button>
+
+</div>
 
 
 <hr>
 
 
-<!-- ======================
-     LORE SYSTEM
-====================== -->
+<h3>Lore</h3>
 
-<h3>Campaign Lore</h3>
-
-<textarea id="loreText" placeholder="Cities, NPCs, factions, history..."></textarea>
-
+<textarea id="loreText" placeholder="World lore, NPCs, cities..."></textarea>
 
 </div>
 
@@ -139,16 +127,8 @@
 </div>
 
 
-<!-- ======================
-     SETTINGS PANEL
-====================== -->
+<div id="settingsPanel"></div>
 
-<div id="settingsPanel" class="hidden"></div>
-
-
-<!-- ======================
-     MAIN SCRIPT
-====================== -->
 
 <script type="module" src="./main.js"></script>
 
