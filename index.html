@@ -1,17 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Campaign Chronicle</title>
 
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:,">
 
 </head>
-
 <body>
 
 <!-- AUTH -->
@@ -36,7 +33,6 @@
 <header>
 
 <h1>Campaign Chronicle</h1>
-
 <button id="settingsBtn">Settings</button>
 
 </header>
@@ -44,8 +40,7 @@
 
 <div class="layout">
 
-
-<!-- CAMPAIGN LIST -->
+<!-- CAMPAIGNS -->
 
 <div class="sidebar">
 
@@ -67,9 +62,7 @@
 <div class="buttons">
 
 <button id="inviteBtn">Invite</button>
-
 <button id="characterBtn">Character Idea</button>
-
 <button id="fireBtn">🔥 Story Idea</button>
 
 </div>
@@ -78,26 +71,26 @@
 
 <div id="typingIndicator"></div>
 
-
 <hr>
 
 
 <h3>Session Notes</h3>
 
-<textarea id="noteText" placeholder="Write session notes..."></textarea>
+<textarea id="noteText"></textarea>
 
 
 <hr>
 
+<h3>Maps</h3>
 
-<h3>Campaign Map</h3>
+<button id="addMapBtn">Add Map</button>
+<input type="file" id="mapUpload" hidden>
 
-<input type="file" id="mapUpload">
+<div id="mapLibrary"></div>
 
-<div id="mapContainer">
+<div id="mapBoard">
 
 <img id="mapImage">
-
 <canvas id="mapCanvas"></canvas>
 
 </div>
@@ -115,20 +108,15 @@
 
 <hr>
 
-
 <h3>Lore</h3>
 
-<textarea id="loreText" placeholder="World lore, NPCs, cities..."></textarea>
+<textarea id="loreText"></textarea>
 
 </div>
 
 </div>
 
 </div>
-
-
-<div id="settingsPanel"></div>
-
 
 <script type="module" src="./main.js"></script>
 
