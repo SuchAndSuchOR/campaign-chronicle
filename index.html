@@ -1,86 +1,156 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Campaign Chronicle Pro</title>
-  <link rel="stylesheet" href="styles.css">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Campaign Chronicle</title>
+
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:,">
+
 </head>
+
 <body>
 
-<header class="app-header">
-  <h1>🎲 Campaign Chronicle</h1>
-</header>
+<!-- ======================
+     AUTH SECTION
+====================== -->
 
 <div id="authSection" class="auth-box">
-  <input id="email" placeholder="Email">
-  <input id="password" type="password" placeholder="Password">
-  <button id="registerBtn">Register</button>
-  <button id="loginBtn">Login</button>
+
+<h1>🎲 Campaign Chronicle</h1>
+
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+
+<div class="auth-buttons">
+<button id="registerBtn">Register</button>
+<button id="loginBtn">Login</button>
 </div>
 
-<div id="appLayout" class="hidden app-layout">
+</div>
 
-  <!-- Sidebar -->
-  <aside class="sidebar">
 
-    <div class="sidebar-top">
-      <h2>Campaigns</h2>
-      <button id="newCampaignBtn">+ New</button>
-    </div>
+<!-- ======================
+     APP LAYOUT
+====================== -->
 
-    <div id="campaignList" class="campaign-list"></div>
+<div id="appLayout" class="hidden">
 
-  </aside>
+<header>
 
-  <!-- Main Content -->
-  <main class="main-area">
+<h1>🎲 Campaign Chronicle</h1>
 
-    <div class="topbar">
+<button id="settingsBtn">⚙ Settings</button>
 
-      <div>
-        <h2 id="campaignTitle">Select a Campaign</h2>
-        <div id="typingIndicator"></div>
-      </div>
+</header>
 
-      <div class="topbar-actions">
-        <button id="settingsBtn">⚙ Settings</button>
-        <button id="logoutBtn">Logout</button>
-      </div>
 
-    </div>
+<!-- ======================
+     MAIN CONTENT
+====================== -->
 
-    <div class="editor-layout">
+<div class="main-container">
 
-      <!-- Editor -->
-      <div class="editor-panel">
 
-        <textarea id="noteText"
-          placeholder="Write your session notes here..."></textarea>
+<!-- ===== LEFT PANEL ===== -->
 
-        <div class="editor-actions">
-          <button id="saveNoteBtn">Save</button>
-          <button id="fireBtn" class="fire-btn">🔥 Fire Idea</button>
-        </div>
+<div class="sidebar">
 
-        <div id="notes" class="notes-feed"></div>
+<h2>Your Campaigns</h2>
 
-      </div>
+<button id="newCampaignBtn">+ Create Campaign</button>
 
-      <!-- Presence Panel -->
-      <div class="presence-panel">
-
-        <h3>Active Players</h3>
-        <div id="presenceList"></div>
-
-      </div>
-
-    </div>
-
-  </main>
+<div id="campaignList"></div>
 
 </div>
+
+
+<!-- ===== RIGHT PANEL ===== -->
+
+<div class="content">
+
+
+<h2 id="campaignTitle">Open a Campaign</h2>
+
+
+<div class="top-buttons">
+
+<button id="inviteBtn">Invite Players</button>
+
+<button id="characterBtn">Character Idea</button>
+
+<button id="fireBtn">🔥 Story Idea</button>
+
+</div>
+
+
+<div id="characterIdea"></div>
+
+<div id="typingIndicator"></div>
+
+
+<hr>
+
+
+<!-- ======================
+     NOTES
+====================== -->
+
+<h3>Session Notes</h3>
+
+<textarea id="noteText" placeholder="Write session notes..."></textarea>
+
+
+<hr>
+
+
+<!-- ======================
+     MAP SYSTEM
+====================== -->
+
+<h3>Campaign Map</h3>
+
+<input type="file" id="mapUpload">
+
+<br><br>
+
+<img id="mapPreview" style="max-width:100%;">
+
+
+<hr>
+
+
+<!-- ======================
+     LORE SYSTEM
+====================== -->
+
+<h3>Campaign Lore</h3>
+
+<textarea id="loreText" placeholder="Cities, NPCs, factions, history..."></textarea>
+
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- ======================
+     SETTINGS PANEL
+====================== -->
+
+<div id="settingsPanel" class="hidden"></div>
+
+
+<!-- ======================
+     MAIN SCRIPT
+====================== -->
 
 <script type="module" src="./main.js"></script>
 
 </body>
-
 </html>
