@@ -23,19 +23,15 @@ import {
 
 import { loadSettings } from "./settings.js";
 
-import { db } from "./firebase.js";
-import { doc, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { setupMap, setTool, clearMap } from "./map.js";
 
 
 /* =========================
-   DOM REFERENCES
+DOM REFERENCES
 ========================= */
 
 const authSection = document.getElementById("authSection");
 const appLayout = document.getElementById("appLayout");
-
-const campaignTitle = document.getElementById("campaignTitle");
-const campaignList = document.getElementById("campaignList");
 
 const textarea = document.getElementById("noteText");
 
@@ -46,11 +42,10 @@ const inviteBtn = document.getElementById("inviteBtn");
 const charBtn = document.getElementById("characterBtn");
 
 const mapUpload = document.getElementById("mapUpload");
-const mapPreview = document.getElementById("mapPreview");
 
 
 /* =========================
-   STATE
+STATE
 ========================= */
 
 let currentUser = null;
@@ -58,217 +53,218 @@ let currentCampaign = null;
 
 
 /* =========================
-   AUTH SYSTEM
+AUTH SYSTEM
 ========================= */
 
 setupAuth(
 
-  /* LOGIN */
+(user)=>{
 
-  (user) => {
+currentUser = user;
 
-    currentUser = user;
+authSection.classList.add("hidden");
+appLayout.classList.remove("hidden");
 
-    authSection.classList.add("hidden");
-    appLayout.classList.remove("hidden");
+setUser(user);
 
-    setUser(user);
+checkInvite(user);
 
-    checkInvite(user);
+loadCampaigns((campaigns)=>{
 
-    loadCampaigns((campaigns) => {
+renderCampaignList(campaigns,openCampaign);
 
-      renderCampaignList(campaigns, openCampaign);
+});
 
-    });
+},
 
-  },
+()=>{
 
-  /* LOGOUT */
+authSection.classList.remove("hidden");
+appLayout.classList.add("hidden");
 
-  () => {
+currentUser=null;
+currentCampaign=null;
 
-    authSection.classList.remove("hidden");
-    appLayout.classList.add("hidden");
-
-    currentUser = null;
-    currentCampaign = null;
-
-  }
+}
 
 );
 
 
 /* =========================
-   CREATE CAMPAIGN
+CREATE CAMPAIGN
 ========================= */
 
-newCampaignBtn.onclick = () => {
+newCampaignBtn.onclick = ()=>{
 
-  createCampaign();
+createCampaign();
 
 };
 
 
 /* =========================
-   OPEN CAMPAIGN
+OPEN CAMPAIGN
 ========================= */
 
 function openCampaign(campaign){
 
-  currentCampaign = campaign.id;
+currentCampaign = campaign.id;
 
-  showCampaign(campaign.name);
+showCampaign(campaign.name);
 
-  /* collaborative editor */
+openEditor(currentCampaign,textarea);
 
-  openEditor(currentCampaign, textarea);
+setupPresence(currentUser,currentCampaign);
 
-  /* presence system */
+watchPresence((users)=>{
 
-  setupPresence(currentUser, currentCampaign);
+const indicator = document.getElementById("typingIndicator");
 
-  watchPresence((users) => {
+indicator.innerText = users.join(", ")+" online";
 
-    const indicator = document.getElementById("typingIndicator");
+});
 
-    indicator.innerText = users.join(", ") + " online";
-
-  });
-
-  trackTyping(textarea);
+trackTyping(textarea);
 
 }
 
 
 /* =========================
-   INVITE SYSTEM
+INVITE SYSTEM
 ========================= */
 
-inviteBtn.onclick = () => {
+inviteBtn.onclick = ()=>{
 
-  if(!currentCampaign) return;
+if(!currentCampaign) return;
 
-  const link =
-    `${window.location.origin}${window.location.pathname}?join=${currentCampaign}`;
+const link =
+`${window.location.origin}${window.location.pathname}?join=${currentCampaign}`;
 
-  navigator.clipboard.writeText(link);
+navigator.clipboard.writeText(link);
 
-  alert("Invite link copied!");
+alert("Invite link copied!");
 
 };
 
 
 /* =========================
-   AUTO JOIN FROM LINK
+AUTO JOIN LINK
 ========================= */
 
 function checkInvite(user){
 
-  const params = new URLSearchParams(window.location.search);
+const params = new URLSearchParams(window.location.search);
 
-  const campaignId = params.get("join");
+const id = params.get("join");
 
-  if(!campaignId) return;
+if(!id) return;
 
-  joinCampaign(campaignId,user.uid);
+joinCampaign(id,user.uid);
 
 }
 
 
 /* =========================
-   CHARACTER IDEA BUTTON
+CHARACTER IDEA
 ========================= */
 
-charBtn.onclick = () => {
+charBtn.onclick = ()=>{
 
-  const idea = generateCharacterIdea();
+const idea = generateCharacterIdea();
 
-  document.getElementById("characterIdea").innerText = idea;
+document.getElementById("characterIdea").innerText = idea;
 
 };
 
 
 /* =========================
-   STORY IDEA BUTTON
+STORY IDEA
 ========================= */
 
-fireBtn.onclick = () => {
+fireBtn.onclick = ()=>{
 
-  const indicator = document.getElementById("typingIndicator");
+const indicator = document.getElementById("typingIndicator");
 
-  fireIdea(textarea.value,indicator);
+fireIdea(textarea.value,indicator);
 
 };
 
 
 /* =========================
-   SETTINGS PANEL
+SETTINGS
 ========================= */
 
-settingsBtn.onclick = () => {
+settingsBtn.onclick = ()=>{
 
-  if(!currentCampaign){
+if(!currentCampaign){
 
-    alert("Open a campaign first.");
+alert("Open a campaign first.");
 
-    return;
+return;
 
-  }
+}
 
-  loadSettings(currentCampaign);
+loadSettings(currentCampaign);
 
 };
 
 
 /* =========================
-   MAP UPLOAD PREVIEW
+MAP SYSTEM
+========================= */
+
+setupMap();
+
+document.getElementById("drawTool").onclick = ()=>setTool("draw");
+document.getElementById("tokenTool").onclick = ()=>setTool("token");
+document.getElementById("fogTool").onclick = ()=>setTool("fog");
+document.getElementById("markerTool").onclick = ()=>setTool("marker");
+
+document.getElementById("clearTool").onclick = clearMap;
+
+
+/* =========================
+MAP UPLOAD
 ========================= */
 
 mapUpload.onchange = (e)=>{
 
-  const file = e.target.files[0];
+const file = e.target.files[0];
 
-  if(!file) return;
+if(!file) return;
 
-  const reader = new FileReader();
+const reader = new FileReader();
 
-  reader.onload = ()=>{
+reader.onload = ()=>{
 
-    mapPreview.src = reader.result;
+document.getElementById("mapImage").src = reader.result;
 
-  };
+};
 
-  reader.readAsDataURL(file);
+reader.readAsDataURL(file);
 
 };
 
 
 /* =========================
-   AUTOSAVE SYSTEM
+AUTOSAVE
 ========================= */
 
 let autosaveTimer;
 
 textarea.addEventListener("input",()=>{
 
-  clearTimeout(autosaveTimer);
+clearTimeout(autosaveTimer);
 
-  autosaveTimer = setTimeout(()=>{
+autosaveTimer=setTimeout(()=>{
 
-    textarea.dispatchEvent(new Event("saveEditor"));
+textarea.dispatchEvent(new Event("saveEditor"));
 
-  },2000);
+},2000);
 
 });
 
-
-/* =========================
-   AUTOSAVE EVENT
-========================= */
-
 textarea.addEventListener("saveEditor",()=>{
 
-  console.log("Autosaved session text");
+console.log("Autosaved");
 
 });
