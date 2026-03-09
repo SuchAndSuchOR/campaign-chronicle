@@ -6,12 +6,43 @@ drawGrid,
 measure
 } from "./map.js"
 
+import {
+createCampaign,
+joinCampaign
+} from "./campaign.js"
 
 
 function get(id){
 return document.getElementById(id)
 }
 
+
+/* CREATE CAMPAIGN */
+
+get("createCampaignBtn").onclick=async()=>{
+
+const code=await createCampaign()
+
+alert("Campaign Code: "+code)
+
+}
+
+
+/* JOIN CAMPAIGN */
+
+get("joinCampaignBtn").onclick=async()=>{
+
+const code=get("joinCodeInput").value
+
+const result=await joinCampaign(code)
+
+if(result){
+
+alert("Joined campaign "+code)
+
+}
+
+}
 
 
 /* MAP UPLOAD */
@@ -40,7 +71,6 @@ reader.readAsDataURL(file)
 }
 
 
-
 /* TOKEN */
 
 get("tokenBtn").onclick=()=>{
@@ -48,7 +78,6 @@ get("tokenBtn").onclick=()=>{
 createToken("https://cdn-icons-png.flaticon.com/512/3522/3522099.png")
 
 }
-
 
 
 /* DRAW */
@@ -60,11 +89,9 @@ enableDrawing()
 }
 
 
-
 /* GRID */
 
 drawGrid()
-
 
 
 /* MEASURE */
@@ -76,15 +103,13 @@ measure()
 }
 
 
-
-/* MARKER UPLOAD */
+/* MARKER */
 
 get("uploadMarkerBtn").onclick=()=>{
 
 get("markerUpload").click()
 
 }
-
 
 get("markerUpload").onchange=(e)=>{
 
