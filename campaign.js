@@ -11,79 +11,54 @@ doc,
 arrayUnion
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
-let currentUser = null;
-
-export function setUser(user){
-
-currentUser = user;
-
-}
-
-
-/* =========================
-GENERATE JOIN CODE
-========================= */
-
 function generateCode(){
 
 return Math.floor(100000 + Math.random() * 900000).toString();
 
 }
 
-
-/* =========================
-CREATE CAMPAIGN
-========================= */
-
 export async function createCampaign(){
 
-const name = prompt("Campaign name?");
+const name=prompt("Campaign name?");
 
-if(!name) return;
+if(!name)return;
 
-const code = generateCode();
+const code=generateCode();
 
 await addDoc(collection(db,"campaigns"),{
 
 name,
 code,
 
-ownerId: currentUser.uid,
+members:[],
 
-members:[currentUser.uid],
-
-roles:{
-[currentUser.uid]:"dm"
-}
+roles:{}
 
 });
 
-alert("Campaign Join Code: " + code);
+alert("Join Code: "+code);
 
 }
 
+export async function joinWithCode(code){
 
-/* =========================
-JOIN CAMPAIGN BY CODE
-========================= */
-
-export async function joinWithCode(code,userId){
-
-const q = query(
+const q=query(
 collection(db,"campaigns"),
 where("code","==",code)
 );
 
-const snap = await getDocs(q);
+const snap=await getDocs(q);
 
-snap.forEach(async(docSnap)=>{
+snap.forEach(async(d)=>{
 
-await updateDoc(doc(db,"campaigns",docSnap.id),{
+await updateDoc(doc(db,"campaigns",d.id),{
 
-members: arrayUnion(userId)
+members:arrayUnion("player")
+
+});
 
 });
 
-});
+alert("Joined campaign");
 
 }
