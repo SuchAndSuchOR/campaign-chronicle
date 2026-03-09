@@ -1,22 +1,23 @@
-import { addMap, enableDrawing, createToken, createFog, addMarker } from "./map.js";
+import { addMap, createToken, createFog, addMarker } from "./map.js";
+import { createCampaign, joinWithCode } from "./campaign.js";
 
 function get(id){
 return document.getElementById(id);
 }
 
 /* =========================
-PAGE SYSTEM
+PAGE SWITCH
 ========================= */
 
-const mapsPageBtn = get("mapsPageBtn");
-const notesPageBtn = get("notesPageBtn");
+const mapsBtn = get("mapsPageBtn");
+const notesBtn = get("notesPageBtn");
 
 const mapsPage = get("mapsPage");
 const notesPage = get("notesPage");
 
-if(mapsPageBtn && mapsPage && notesPage){
+if(mapsBtn){
 
-mapsPageBtn.onclick = ()=>{
+mapsBtn.onclick = ()=>{
 
 mapsPage.classList.remove("hidden");
 notesPage.classList.add("hidden");
@@ -25,9 +26,9 @@ notesPage.classList.add("hidden");
 
 }
 
-if(notesPageBtn && mapsPage && notesPage){
+if(notesBtn){
 
-notesPageBtn.onclick = ()=>{
+notesBtn.onclick = ()=>{
 
 notesPage.classList.remove("hidden");
 mapsPage.classList.add("hidden");
@@ -44,13 +45,17 @@ MAP UPLOAD
 const addMapBtn = get("addMapBtn");
 const mapUpload = get("mapUpload");
 
-if(addMapBtn && mapUpload){
+if(addMapBtn){
 
 addMapBtn.onclick = ()=>{
 
 mapUpload.click();
 
 };
+
+}
+
+if(mapUpload){
 
 mapUpload.onchange = (e)=>{
 
@@ -74,7 +79,7 @@ reader.readAsDataURL(file);
 
 
 /* =========================
-TOKEN BUTTON
+TOKEN
 ========================= */
 
 const tokenBtn = get("tokenBtn");
@@ -91,7 +96,7 @@ createToken("https://cdn-icons-png.flaticon.com/512/3522/3522099.png");
 
 
 /* =========================
-FOG BUTTON
+FOG
 ========================= */
 
 const fogBtn = get("fogBtn");
@@ -108,7 +113,7 @@ createFog();
 
 
 /* =========================
-MARKER BUTTON
+MARKER
 ========================= */
 
 const markerBtn = get("markerBtn");
@@ -118,6 +123,42 @@ if(markerBtn){
 markerBtn.onclick = ()=>{
 
 addMarker(200,200,"📍");
+
+};
+
+}
+
+
+/* =========================
+CREATE CAMPAIGN
+========================= */
+
+const newCampaignBtn = get("newCampaignBtn");
+
+if(newCampaignBtn){
+
+newCampaignBtn.onclick = ()=>{
+
+createCampaign();
+
+};
+
+}
+
+
+/* =========================
+JOIN CODE
+========================= */
+
+const joinBtn = get("joinBtn");
+
+if(joinBtn){
+
+joinBtn.onclick = ()=>{
+
+const code = get("joinCodeInput").value;
+
+joinWithCode(code);
 
 };
 
