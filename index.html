@@ -1,27 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
+
 <head>
+
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Campaign Chronicle</title>
 
 <link rel="stylesheet" href="styles.css">
-<link rel="icon" href="data:,">
 
 </head>
+
 <body>
 
-<!-- AUTH -->
+<!-- LOGIN -->
 
 <div id="authSection">
 
-<h1>🎲 Campaign Chronicle</h1>
+<h1>Campaign Chronicle</h1>
 
 <input id="email" placeholder="Email">
 <input id="password" type="password" placeholder="Password">
 
 <button id="registerBtn">Register</button>
 <button id="loginBtn">Login</button>
+
+<hr>
+
+<input id="joinCodeInput" placeholder="Join Code">
+<button id="joinBtn">Join Campaign</button>
 
 </div>
 
@@ -33,7 +39,9 @@
 <header>
 
 <h1>Campaign Chronicle</h1>
-<button id="settingsBtn">Settings</button>
+
+<button id="notesPageBtn">Notes</button>
+<button id="mapsPageBtn">Maps</button>
 
 </header>
 
@@ -46,71 +54,51 @@
 
 <h2>Your Campaigns</h2>
 
-<button id="newCampaignBtn">+ Create Campaign</button>
+<button id="newCampaignBtn">Create Campaign</button>
 
 <div id="campaignList"></div>
 
 </div>
 
 
-<!-- MAIN CONTENT -->
-
 <div class="content">
 
 <h2 id="campaignTitle">Open a campaign</h2>
 
-<div class="buttons">
 
-<button id="inviteBtn">Invite</button>
-<button id="characterBtn">Character Idea</button>
-<button id="fireBtn">🔥 Story Idea</button>
+<!-- NOTES -->
 
-</div>
-
-<div id="characterIdea"></div>
-
-<div id="typingIndicator"></div>
-
-<hr>
-
+<div id="notesPage">
 
 <h3>Session Notes</h3>
 
 <textarea id="noteText"></textarea>
 
+<h3>Private Notes</h3>
 
-<hr>
+<textarea id="privateNotes"></textarea>
 
-<h3>Maps</h3>
+</div>
+
+
+<!-- MAP BOARD -->
+
+<div id="mapsPage" class="hidden">
+
+<h2>Map Board</h2>
+
+<div class="mapControls">
 
 <button id="addMapBtn">Add Map</button>
+<button id="tokenBtn">Add Token</button>
+<button id="fogBtn">Fog of War</button>
+<button id="markerBtn">Add Marker</button>
+
+</div>
+
 <input type="file" id="mapUpload" hidden>
 
-<div id="mapLibrary"></div>
-
-<div id="mapBoard">
-
-<img id="mapImage">
-<canvas id="mapCanvas"></canvas>
-
-</div>
-
-<div class="mapTools">
-
-<button id="drawTool">Draw</button>
-<button id="tokenTool">Token</button>
-<button id="fogTool">Fog</button>
-<button id="markerTool">Marker</button>
-<button id="clearTool">Clear</button>
-
-</div>
-
-
-<hr>
-
-<h3>Lore</h3>
-
-<textarea id="loreText"></textarea>
+<div id="mapBoard"></div>
 
 </div>
 
@@ -118,7 +106,9 @@
 
 </div>
 
-<script type="module" src="./main.js"></script>
+</div>
+
+<script type="module" src="main.js"></script>
 
 </body>
 </html>
