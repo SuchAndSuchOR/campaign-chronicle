@@ -6,35 +6,33 @@ signInWithEmailAndPassword,
 onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 
+export function initAuth(onLogin){
 
-export function setupAuth(onLogin){
+const email = document.getElementById("email");
+const pass = document.getElementById("password");
 
 const registerBtn = document.getElementById("registerBtn");
 const loginBtn = document.getElementById("loginBtn");
 
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
+registerBtn.onclick = async () => {
 
-
-registerBtn.onclick = async ()=>{
-
-const email = emailInput.value;
-const pass = passwordInput.value;
-
-await createUserWithEmailAndPassword(auth,email,pass);
+await createUserWithEmailAndPassword(
+auth,
+email.value,
+pass.value
+);
 
 };
 
+loginBtn.onclick = async () => {
 
-loginBtn.onclick = async ()=>{
-
-const email = emailInput.value;
-const pass = passwordInput.value;
-
-await signInWithEmailAndPassword(auth,email,pass);
+await signInWithEmailAndPassword(
+auth,
+email.value,
+pass.value
+);
 
 };
-
 
 onAuthStateChanged(auth,(user)=>{
 
