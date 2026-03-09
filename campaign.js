@@ -1,64 +1,63 @@
-import { db } from "./firebase.js";
+import { db } from "./firebase.js"
 
 import {
 collection,
-addDoc,
-query,
-where,
-getDocs,
-updateDoc,
 doc,
-arrayUnion
-} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+setDoc,
+getDoc
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js"
+
+
+let currentCampaign=null
+
 
 function generateCode(){
 
-return Math.floor(100000 + Math.random() * 900000).toString();
+return Math.floor(100000 + Math.random()*900000).toString()
 
 }
+
 
 export async function createCampaign(){
 
-const name=prompt("Campaign name?");
+const code=generateCode()
 
-if(!name)return;
+await setDoc(doc(db,"campaigns",code),{
 
-const code=generateCode();
+created:Date.now()
 
-await addDoc(collection(db,"campaigns"),{
+})
 
-name,
-code,
+currentCampaign=code
 
-members:[],
-
-roles:{}
-
-});
-
-alert("Join Code: "+code);
+return code
 
 }
 
-export async function joinWithCode(code){
 
-const q=query(
-collection(db,"campaigns"),
-where("code","==",code)
-);
+export async function joinCampaign(code){
 
-const snap=await getDocs(q);
+const ref=doc(db,"campaigns",code)
 
-snap.forEach(async(d)=>{
+const snap=await getDoc(ref)
 
-await updateDoc(doc(db,"campaigns",d.id),{
+if(!snap.exists()){
 
-members:arrayUnion("player")
+alert("Campaign not found")
 
-});
+return null
 
-});
+}
 
-alert("Joined campaign");
+currentCampaign=code
+
+return code
+
+}
+
+
+export function getCampaign(){
+
+return currentCampaign
 
 }
