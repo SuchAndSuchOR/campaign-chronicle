@@ -13,50 +13,18 @@
 
 </head>
 
-
 <body>
-
-
-<!-- ======================
-AUTH
-====================== -->
-
-<div id="authSection">
-
-<h1>Campaign Chronicle</h1>
-
-<input id="email" placeholder="Email">
-<br><br>
-
-<input id="password" type="password" placeholder="Password">
-<br><br>
-
-<button id="registerBtn">Register</button>
-<button id="loginBtn">Login</button>
-
-<hr>
-
-<input id="joinCodeInput" placeholder="Join Code">
-
-<button id="joinBtn">Join Campaign</button>
-
-</div>
-
-
-
-<!-- ======================
-APP
-====================== -->
-
-<div id="appLayout" class="hidden">
 
 
 <header>
 
 <h1>Campaign Chronicle</h1>
 
-<button id="notesPageBtn">Notes</button>
-<button id="mapsPageBtn">Maps</button>
+<button id="createCampaignBtn">Create Campaign</button>
+
+<input id="joinCodeInput" placeholder="Join Code">
+
+<button id="joinCampaignBtn">Join Campaign</button>
 
 </header>
 
@@ -64,14 +32,9 @@ APP
 
 <div class="layout">
 
-
-<!-- SIDEBAR -->
-
 <div class="sidebar">
 
 <h2>Your Campaigns</h2>
-
-<button id="newCampaignBtn">Create Campaign</button>
 
 <div id="campaignList"></div>
 
@@ -79,15 +42,10 @@ APP
 
 
 
-<!-- CONTENT -->
-
 <div class="content">
 
 <h2 id="campaignTitle">Map Board</h2>
 
-
-
-<div id="mapsPage">
 
 <div class="mapControls">
 
@@ -101,9 +59,9 @@ APP
 
 <button id="uploadMarkerBtn">Upload Marker</button>
 
-<button id="fireBtn">🔥 Fire Idea</button>
+<button id="fireBtn">🔥 Idea</button>
 
-<button id="backstoryBtn">🧙 Backstory Helper</button>
+<button id="backstoryBtn">🧙 Backstory</button>
 
 </div>
 
@@ -111,7 +69,6 @@ APP
 <input type="file" id="mapUpload" hidden>
 
 <input type="file" id="markerUpload" hidden>
-
 
 
 <div id="mapBoard">
@@ -122,19 +79,9 @@ APP
 
 </div>
 
-
 </div>
 
-
-
 </div>
-
-
-</div>
-
-
-</div>
-
 
 
 <script type="module" src="main.js"></script>
