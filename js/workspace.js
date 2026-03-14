@@ -540,14 +540,14 @@ function renderViews() {
 function renderMapList() {
   els.mapCount.textContent = String(state.maps.length);
   const map = getActiveMap();
-  els.activeMapName.textContent = map?.name || "Upload a map to begin";
+  els.activeMapName.textContent = map ? `${map.name} (active map)` : "Upload a map to begin";
   els.toggleFogBtn.textContent = `Fog: ${map?.fogEnabled ? "On" : "Off"}`;
   els.mapList.innerHTML = state.maps.length ? state.maps.map(mapItem => `
     <button class="list-item ${mapItem.id === state.currentMapId ? "is-active" : ""}" data-map-id="${mapItem.id}">
       <span class="list-item-title">${escapeHtml(mapItem.name || "Unnamed map")}</span>
       <span class="list-item-meta">${Math.round(mapItem.width || 0)}px wide • ${mapItem.fogEnabled ? "Fog on" : "Fog off"}</span>
     </button>
-  `).join("") : `<div class="empty-state">Upload one or many maps, then switch between them here.</div>`;
+  `).join("") : `<div class="empty-state">Upload one or many maps. They stay on the board together so you can stitch them into one scene.</div>`;
 
   els.mapList.querySelectorAll("[data-map-id]").forEach(button => {
     button.addEventListener("click", () => {
@@ -563,19 +563,18 @@ function renderMapList() {
 }
 
 function renderBoard() {
-  const map = getActiveMap();
   const size = boardSize();
   els.mapBoard.style.width = `${size.width}px`;
   els.mapBoard.style.height = `${size.height}px`;
   resizeCanvas(els.drawCanvas, size);
   resizeCanvas(els.fogCanvas, size);
 
-  els.mapItemLayer.innerHTML = map ? `
-    <div class="scene-item map-item ${isSelected("map", map.id) ? "is-selected" : ""}" data-kind="map" data-id="${map.id}" style="left:${map.x}px;top:${map.y}px;width:${map.width}px;height:${map.height}px;">
+  els.mapItemLayer.innerHTML = state.maps.map(map => `
+    <div class="scene-item map-item ${isSelected("map", map.id) ? "is-selected" : ""} ${map.id === state.currentMapId ? "is-active-map" : ""}" data-kind="map" data-id="${map.id}" style="left:${map.x}px;top:${map.y}px;width:${map.width}px;height:${map.height}px;">
       <img src="${escapeHtml(map.imageUrl)}" alt="${escapeHtml(map.name)}">
-      <div class="scene-tag">${escapeHtml(map.name)}</div>
+      <div class="scene-tag">${escapeHtml(map.id === state.currentMapId ? `${map.name} - active` : map.name)}</div>
     </div>
-  ` : "";
+  `).join("");
 
   els.tokenLayer.innerHTML = state.tokens.map(token => `
     <div class="scene-item token-item ${isSelected("token", token.id) ? "is-selected" : ""}" data-kind="token" data-id="${token.id}" style="left:${token.x}px;top:${token.y}px;width:${token.size}px;height:${token.size}px;">
@@ -866,7 +865,7 @@ function setTool(tool) {
   });
 
   const hints = {
-    move: "Drag maps and markers around the board. Resize from the inspector.",
+    move: "Drag maps and markers around the board. Uploaded maps stay on the same scene so you can stitch them together.",
     pan: "Drag the viewport to move across larger maps.",
     draw: "Sketch directly on the active map.",
     "fog-cover": "Paint fog back over unexplored areas.",
@@ -877,6 +876,11 @@ function setTool(tool) {
 }
 
 function selectItem(kind, id) {
+  if (kind === "map" && state.currentMapId !== id) {
+    state.currentMapId = id;
+    watchCurrentMap();
+    renderMapList();
+  }
   state.selected = { kind, id };
   renderBoard();
   updateInspector();
@@ -884,7 +888,9 @@ function selectItem(kind, id) {
 
 function selectedEntity() {
   if (!state.selected) return null;
-  if (state.selected.kind === "map") return getActiveMap();
+  if (state.selected.kind === "map") {
+    return state.maps.find(map => map.id === state.selected.id) || null;
+  }
   return state.tokens.find(token => token.id === state.selected.id) || null;
 }
 
@@ -954,16 +960,26 @@ function boardPoint(clientX, clientY) {
 function boardSize() {
   let width = 2200;
   let height = 1400;
-  const map = getActiveMap();
-  if (map) {
+  state.maps.forEach(map => {
     width = Math.max(width, map.x + map.width + 240);
     height = Math.max(height, map.y + map.height + 240);
-  }
+  });
   state.tokens.forEach(token => {
     width = Math.max(width, token.x + token.size + 180);
     height = Math.max(height, token.y + token.size + 180);
   });
   return { width, height };
+}
+
+function nextMapPlacement() {
+  if (!state.maps.length) {
+    return { x: 120, y: 120 };
+  }
+
+  return {
+    x: Math.max(...state.maps.map(map => (map.x || 0) + (map.width || 0))) + 80,
+    y: Math.max(120, Math.min(...state.maps.map(map => map.y || 120)))
+  };
 }
 
 function resizeCanvas(canvas, size) {
@@ -1023,6 +1039,8 @@ async function uploadMaps(files) {
   }
 
   const now = Date.now();
+  const start = nextMapPlacement();
+  let nextX = start.x;
   for (const [index, file] of files.entries()) {
     const meta = await readImageMeta(file);
     const storagePath = `campaigns/${state.currentCampaignId}/maps/${now + index}-${safeFileName(file.name)}`;
@@ -1035,8 +1053,8 @@ async function uploadMaps(files) {
       name: fileBaseName(file.name),
       imageUrl,
       storagePath,
-      x: 120,
-      y: 120,
+      x: nextX,
+      y: start.y + ((index % 2) * 36),
       width,
       height: Math.round(width / aspectRatio),
       aspectRatio,
@@ -1044,6 +1062,7 @@ async function uploadMaps(files) {
       createdAt: now + index,
       updatedAt: now + index
     });
+    nextX += width + 80;
   }
 
   els.mapUpload.value = "";
@@ -1103,7 +1122,7 @@ async function deleteSelection() {
   if (!confirm("Delete the selected item?")) return;
 
   if (state.selected.kind === "map") {
-    const map = getActiveMap();
+    const map = selectedEntity();
     if (!map) return;
     await deleteDoc(doc(db, "campaigns", state.currentCampaignId, "maps", map.id));
   } else {
