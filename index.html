@@ -36,6 +36,34 @@
     </section>
 
     <section class="panel">
+      <div class="panel-heading">
+        <h2>Account</h2>
+        <span id="accountModeLabel" class="pill">Guest</span>
+      </div>
+
+      <div id="guestAuthForm" class="account-stack">
+        <label class="stacked-field">
+          <span>Email</span>
+          <input id="authEmailInput" type="email" autocomplete="email" placeholder="you@example.com">
+        </label>
+        <label class="stacked-field">
+          <span>Password</span>
+          <input id="authPasswordInput" type="password" autocomplete="current-password" placeholder="At least 6 characters">
+        </label>
+        <div class="account-actions">
+          <button id="createAccountBtn">Create Account</button>
+          <button id="signInBtn" class="secondary">Sign In</button>
+        </div>
+        <p class="muted">Create an account to keep your characters and private notes across devices.</p>
+      </div>
+
+      <div id="accountActions" class="account-stack hidden">
+        <p id="accountEmailLabel" class="muted">Signed in account</p>
+        <button id="signOutBtn" class="secondary">Sign Out To Guest</button>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>Campaigns</h2>
       <label class="stacked-field">
         <span>New campaign name</span>
@@ -69,6 +97,7 @@
       <div class="topbar-actions">
         <button class="nav-btn is-active" data-view="campaign">Campaign</button>
         <button class="nav-btn" data-view="map">Map</button>
+        <button class="nav-btn" data-view="characters">Characters</button>
         <button class="nav-btn" data-view="shared-notes">Shared Notes</button>
         <button class="nav-btn" data-view="private-notes">Private Notes</button>
         <button id="copyCodeBtn" class="secondary">Copy Join Code</button>
@@ -106,6 +135,16 @@
             <span id="campaignOwnerLabel" class="pill">Owner: -</span>
           </div>
           <textarea id="campaignSummaryInput" class="campaign-summary" placeholder="Session goals, key NPCs, loot, clues, or reminders for the whole table."></textarea>
+        </article>
+      </div>
+
+      <div class="campaign-tools-layout">
+        <article class="panel">
+          <div class="panel-heading">
+            <h3>Party Roster</h3>
+            <span id="campaignAdminHint" class="pill">Player view</span>
+          </div>
+          <div id="rosterEditor" class="list"></div>
         </article>
       </div>
     </section>
@@ -235,6 +274,52 @@
             <textarea id="sharedBodyInput" placeholder="Session recap, loot, clues, NPC voices, room ideas..."></textarea>
           </label>
           <p id="sharedSaveStatus" class="muted">Shared pages autosave.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="charactersView" class="view">
+      <div class="characters-layout">
+        <aside class="panel notes-side">
+          <div class="panel-heading">
+            <h3>Your Characters</h3>
+            <div class="account-actions">
+              <button id="addCharacterBtn" class="secondary">New Character</button>
+              <button id="deleteCharacterBtn" class="ghost">Delete</button>
+            </div>
+          </div>
+          <p id="characterAccountHint" class="muted">Characters save to your account.</p>
+          <div id="characterList" class="list"></div>
+        </aside>
+
+        <div class="panel notes-editor">
+          <label class="stacked-field">
+            <span>Character name</span>
+            <input id="characterNameInput" placeholder="Mira Ashfall">
+          </label>
+          <div class="character-meta-grid">
+            <label class="stacked-field">
+              <span>Title</span>
+              <input id="characterTitleInput" placeholder="Stormcaller">
+            </label>
+            <label class="stacked-field">
+              <span>Class</span>
+              <input id="characterClassInput" placeholder="Cleric / Wizard">
+            </label>
+            <label class="stacked-field">
+              <span>Level</span>
+              <input id="characterLevelInput" type="number" min="1" max="20" step="1" placeholder="5">
+            </label>
+            <label class="stacked-field">
+              <span>Ancestry</span>
+              <input id="characterAncestryInput" placeholder="Elf">
+            </label>
+          </div>
+          <label class="stacked-field grow">
+            <span>Character notes</span>
+            <textarea id="characterNotesInput" placeholder="Goals, gear, bonds, spell list, backstory, secrets, and anything else you want saved."></textarea>
+          </label>
+          <p id="characterSaveStatus" class="muted">Character sheets autosave.</p>
         </div>
       </div>
     </section>

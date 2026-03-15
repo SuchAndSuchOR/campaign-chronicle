@@ -178,6 +178,7 @@ textarea {
 .join-row,
 .color-row,
 .number-row,
+.account-actions,
 .panel-heading {
   display: flex;
   gap: 0.75rem;
@@ -192,6 +193,11 @@ textarea {
 
 .toolbar-group.compact {
   gap: 0.55rem;
+}
+
+.account-stack {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .eyebrow,
@@ -277,13 +283,19 @@ textarea {
 }
 
 .member-card {
-  display: flex;
-  align-items: center;
+  display: grid;
+  gap: 0.75rem;
   gap: 0.75rem;
   padding: 0.8rem;
   border-radius: 18px;
   background: rgba(6, 10, 11, 0.3);
   border: 1px solid rgba(255, 248, 235, 0.08);
+}
+
+.member-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .member-swatch {
@@ -302,6 +314,17 @@ textarea {
   font-size: 0.95rem;
 }
 
+.member-admin {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.member-admin-row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+}
+
 .view {
   display: none;
 }
@@ -311,8 +334,10 @@ textarea {
 }
 
 .overview-grid,
+.campaign-tools-layout,
 .notes-layout,
-.map-layout {
+.map-layout,
+.characters-layout {
   display: grid;
   gap: 1rem;
 }
@@ -341,6 +366,10 @@ textarea {
 
 .campaign-summary {
   min-height: 280px;
+}
+
+.campaign-tools-layout {
+  margin-top: 1rem;
 }
 
 .map-toolbar {
@@ -555,6 +584,16 @@ textarea {
   grid-template-columns: 280px minmax(0, 1fr);
 }
 
+.characters-layout {
+  grid-template-columns: 320px minmax(0, 1fr);
+}
+
+.character-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
 .notes-side,
 .notes-editor,
 .map-panel,
@@ -593,8 +632,10 @@ input[type="range"] {
   }
 
   .overview-grid,
+  .campaign-tools-layout,
   .notes-layout,
-  .map-layout {
+  .map-layout,
+  .characters-layout {
     grid-template-columns: 1fr;
   }
 
@@ -621,8 +662,14 @@ input[type="range"] {
   }
 
   .topbar-actions,
-  .toolbar-group {
+  .toolbar-group,
+  .account-actions,
+  .member-admin-row {
     justify-content: flex-start;
+  }
+
+  .character-meta-grid {
+    grid-template-columns: 1fr;
   }
 
   #toolHint {

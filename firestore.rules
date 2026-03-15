@@ -10,15 +10,25 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/campaigns/$(campaignId)/members/$(request.auth.uid));
     }
 
+    function isCampaignOwner(campaignId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/campaigns/$(campaignId)).data.ownerId == request.auth.uid;
+    }
+
     match /campaigns/{campaignId} {
       allow create: if signedIn() && request.resource.data.ownerId == request.auth.uid;
       allow read: if signedIn();
-      allow update, delete: if isCampaignMember(campaignId);
+      allow update: if (isCampaignMember(campaignId) &&
+        request.resource.data.ownerId == resource.data.ownerId) ||
+        isCampaignOwner(campaignId);
+      allow delete: if isCampaignOwner(campaignId);
 
       match /members/{userId} {
         allow read: if isCampaignMember(campaignId);
-        allow create, update: if isCampaignMember(campaignId) || request.auth.uid == userId;
-        allow delete: if request.auth.uid == userId;
+        allow create, update: if signedIn() &&
+          (request.auth.uid == userId || isCampaignOwner(campaignId));
+        allow delete: if signedIn() &&
+          (request.auth.uid == userId || isCampaignOwner(campaignId));
       }
 
       match /tokens/{tokenId} {
@@ -50,6 +60,11 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == userId;
 
       match /campaigns/{campaignId} {
+        allow read, write: if signedIn() &&
+          (request.auth.uid == userId || isCampaignOwner(campaignId));
+      }
+
+      match /characters/{characterId} {
         allow read, write: if signedIn() && request.auth.uid == userId;
       }
 

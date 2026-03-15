@@ -1,7 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
 import {
+  EmailAuthProvider,
+  createUserWithEmailAndPassword,
   getAuth,
-  signInAnonymously
+  linkWithCredential,
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
 import { getFirestore } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 import { getStorage } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-storage.js";
@@ -26,6 +32,42 @@ export async function ensureSignedIn() {
     return auth.currentUser;
   }
 
+  const result = await signInAnonymously(auth);
+  return result.user;
+}
+
+export async function createAccount(email, password, displayName = "") {
+  const trimmedEmail = email.trim();
+  const cleanName = displayName.trim();
+
+  if (auth.currentUser?.isAnonymous) {
+    const credential = EmailAuthProvider.credential(trimmedEmail, password);
+    const result = await linkWithCredential(auth.currentUser, credential);
+    if (cleanName) {
+      await updateProfile(result.user, { displayName: cleanName });
+    }
+    return result.user;
+  }
+
+  const result = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+  if (cleanName) {
+    await updateProfile(result.user, { displayName: cleanName });
+  }
+  return result.user;
+}
+
+export async function signInToAccount(email, password) {
+  const trimmedEmail = email.trim();
+  if (auth.currentUser?.isAnonymous) {
+    await signOut(auth);
+  }
+
+  const result = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+  return result.user;
+}
+
+export async function signOutToGuest() {
+  await signOut(auth);
   const result = await signInAnonymously(auth);
   return result.user;
 }

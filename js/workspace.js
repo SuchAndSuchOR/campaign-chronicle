@@ -17,7 +17,7 @@ import {
   ref,
   uploadBytes
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-storage.js";
-import { auth, db, ensureSignedIn, storage } from "./firebase.js";
+import { auth, createAccount, db, ensureSignedIn, signInToAccount, signOutToGuest, storage } from "./firebase.js";
 
 const DEFAULT_PROFILE = { name: "Wandering Player", color: "#d97706" };
 const MAP_MIN = 480;
@@ -27,9 +27,12 @@ const TOKEN_MAX = 256;
 
 const state = {
   user: null,
+  authSignature: "",
   authReady: false,
   authFailed: false,
   profile: loadProfile(),
+  characters: [],
+  activeCharacterId: null,
   activeView: "campaign",
   activeTool: "move",
   currentCampaignId: null,
@@ -60,8 +63,11 @@ const state = {
   mapUnsubs: [],
   overlayWatchKey: "",
   campaignListUnsub: null,
+  userDocUnsub: null,
+  characterUnsub: null,
   summaryTimer: null,
   noteTimers: { shared: null, private: null },
+  characterSaveTimer: null,
   toolHintTimer: null,
   boardDragDepth: 0
 };
@@ -74,10 +80,13 @@ async function init() {
   cacheEls();
   bindUi();
   renderProfile();
+  renderAccountPanel();
   renderViews();
   renderCampaignList();
   renderMembers();
   renderMapList();
+  renderCharacters();
+  renderRosterEditor();
   renderNotes("shared");
   renderNotes("private");
   updateInspector();
@@ -87,26 +96,40 @@ async function init() {
 
   onAuthStateChanged(auth, async user => {
     if (!user) {
+      const hadUser = !!state.user;
       state.user = null;
+      state.authSignature = "";
       state.authReady = false;
+      cleanupUserDataSubs();
+      if (hadUser) {
+        resetSessionForAccountSwitch();
+      }
+      renderAccountPanel();
       updateAuthControls();
       return;
     }
 
-    if (state.user?.uid === user.uid && state.authReady) {
+    const nextSignature = `${user.uid}:${user.isAnonymous}:${user.email || ""}`;
+    if (state.authSignature === nextSignature && state.authReady) {
       return;
     }
 
+    const previousUid = state.user?.uid || null;
+    const uidChanged = !!previousUid && previousUid !== user.uid;
+
     state.user = user;
+    state.authSignature = nextSignature;
     state.authReady = true;
     state.authFailed = false;
+    renderAccountPanel();
     updateAuthControls();
-    setStatus(`Connected as ${state.profile.name}`);
-    watchCampaignList();
-
-    if (state.currentCampaignId) {
-      await ensureMembership(state.currentCampaignId);
+    if (uidChanged) {
+      resetSessionForAccountSwitch();
     }
+    await syncUserProfileDoc();
+    watchUserData();
+    watchCampaignList();
+    setStatus(user.isAnonymous ? `Connected as guest ${state.profile.name}` : `Signed in as ${user.email || state.profile.name}`);
   });
 
   try {
@@ -127,17 +150,23 @@ async function init() {
 function cacheEls() {
   [
     "displayNameInput", "playerColorInput", "saveProfileBtn", "authStatus",
+    "accountModeLabel", "guestAuthForm", "accountActions", "accountEmailLabel",
+    "authEmailInput", "authPasswordInput", "createAccountBtn", "signInBtn", "signOutBtn",
     "campaignNameInput", "createCampaignBtn", "joinCodeInput", "joinCampaignBtn",
     "campaignList", "memberList", "memberCount", "campaignTitle", "campaignMeta",
     "copyCodeBtn", "campaignView", "mapView", "sharedNotesView", "privateNotesView",
+    "charactersView",
     "overviewName", "overviewCode", "overviewMapCount", "overviewPageCount",
-    "overviewOnlineCount", "campaignOwnerLabel", "campaignSummaryInput",
+    "overviewOnlineCount", "campaignOwnerLabel", "campaignSummaryInput", "campaignAdminHint", "rosterEditor",
     "mapUpload", "markerUpload", "uploadMapsBtn", "placePlayerMarkerBtn", "uploadMarkerBtn", "deleteSelectionBtn",
     "brushSizeInput", "drawColorInput", "zoomInput", "toggleFogBtn", "clearDrawingBtn",
     "clearFogBtn", "mapList", "mapCount", "activeMapName", "toolHint", "boardViewport", "boardDropHint",
     "boardStage", "mapBoard", "mapItemLayer", "tokenLayer", "cursorLayer", "drawCanvas",
     "fogCanvas", "selectionLabel", "inspectorEmpty", "inspectorForm", "selectedNameInput",
     "selectedSizeInput", "selectedXInput", "selectedYInput", "selectionMeta", "sizeLabel",
+    "characterList", "characterAccountHint", "addCharacterBtn", "deleteCharacterBtn",
+    "characterNameInput", "characterTitleInput", "characterClassInput", "characterLevelInput",
+    "characterAncestryInput", "characterNotesInput", "characterSaveStatus",
     "sharedPageList", "privatePageList", "addSharedPageBtn", "addPrivatePageBtn",
     "sharedTitleInput", "sharedBodyInput", "sharedSaveStatus", "privateTitleInput",
     "privateBodyInput", "privateSaveStatus"
@@ -148,6 +177,10 @@ function cacheEls() {
 
 function bindUi() {
   els.saveProfileBtn.addEventListener("click", saveProfile);
+  els.createAccountBtn.addEventListener("click", createAccountFromUi);
+  els.signInBtn.addEventListener("click", signInFromUi);
+  els.signOutBtn.addEventListener("click", signOutFromUi);
+  els.authPasswordInput.addEventListener("keydown", onAuthPasswordKeyDown);
   els.createCampaignBtn.addEventListener("click", createCampaign);
   els.joinCampaignBtn.addEventListener("click", joinCampaign);
   els.campaignNameInput.addEventListener("keydown", onCampaignNameKeyDown);
@@ -168,6 +201,14 @@ function bindUi() {
   els.clearFogBtn.addEventListener("click", clearOverlayCollection.bind(null, "fogActions"));
   els.deleteSelectionBtn.addEventListener("click", deleteSelection);
   els.campaignSummaryInput.addEventListener("input", scheduleSummarySave);
+  els.addCharacterBtn.addEventListener("click", createCharacter);
+  els.deleteCharacterBtn.addEventListener("click", deleteCharacter);
+  els.characterNameInput.addEventListener("input", scheduleCharacterSave);
+  els.characterTitleInput.addEventListener("input", scheduleCharacterSave);
+  els.characterClassInput.addEventListener("input", scheduleCharacterSave);
+  els.characterLevelInput.addEventListener("input", scheduleCharacterSave);
+  els.characterAncestryInput.addEventListener("input", scheduleCharacterSave);
+  els.characterNotesInput.addEventListener("input", scheduleCharacterSave);
   els.addSharedPageBtn.addEventListener("click", () => createNotePage("shared"));
   els.addPrivatePageBtn.addEventListener("click", () => createNotePage("private"));
   els.sharedTitleInput.addEventListener("input", () => scheduleNoteSave("shared"));
@@ -214,12 +255,196 @@ function updateAuthControls() {
   els.joinCampaignBtn.disabled = waitingForAuth;
   els.campaignNameInput.disabled = waitingForAuth;
   els.joinCodeInput.disabled = waitingForAuth;
+  els.authEmailInput.disabled = waitingForAuth;
+  els.authPasswordInput.disabled = waitingForAuth;
+  els.createAccountBtn.disabled = waitingForAuth;
+  els.signInBtn.disabled = waitingForAuth;
+  els.signOutBtn.disabled = waitingForAuth || !state.user || state.user.isAnonymous;
+}
+
+function renderAccountPanel() {
+  const accountUser = !!state.user && !state.user.isAnonymous;
+  els.accountModeLabel.textContent = accountUser ? "Account" : "Guest";
+  els.guestAuthForm.classList.toggle("hidden", accountUser);
+  els.accountActions.classList.toggle("hidden", !accountUser);
+  els.accountEmailLabel.textContent = accountUser
+    ? `Signed in as ${state.user.email || state.profile.name}`
+    : "";
+  els.characterAccountHint.textContent = accountUser
+    ? "Characters save to your account and follow you across devices."
+    : "Guest mode: create an account to keep your characters across devices.";
+}
+
+function accountAuthError(error, fallback) {
+  const messages = {
+    "auth/email-already-in-use": "That email is already in use. Try signing in instead.",
+    "auth/invalid-email": "That email address does not look valid.",
+    "auth/invalid-credential": "That email and password did not match an account.",
+    "auth/network-request-failed": "The network request failed. Check your connection and try again.",
+    "auth/too-many-requests": "Too many attempts hit Firebase at once. Wait a moment and try again.",
+    "auth/user-not-found": "No account was found for that email yet.",
+    "auth/weak-password": "Use a password with at least 6 characters.",
+    "auth/wrong-password": "That password did not match this account."
+  };
+
+  return messages[error?.code] || fallback;
+}
+
+function cleanupUserDataSubs() {
+  state.userDocUnsub?.();
+  state.characterUnsub?.();
+  state.userDocUnsub = null;
+  state.characterUnsub = null;
+  state.characters = [];
+  state.activeCharacterId = null;
+  window.clearTimeout(state.characterSaveTimer);
+  state.characterSaveTimer = null;
+  renderCharacters();
+}
+
+function resetSessionForAccountSwitch() {
+  state.campaignListUnsub?.();
+  state.campaignListUnsub = null;
+  cleanupCampaignSubs();
+  cleanupMapSubs();
+  state.currentCampaignId = null;
+  state.currentCampaign = null;
+  state.currentMapId = null;
+  state.campaigns = [];
+  state.maps = [];
+  state.members = [];
+  state.tokens = [];
+  state.drawings = [];
+  state.fogActions = [];
+  state.sharedPages = [];
+  state.privatePages = [];
+  state.activeSharedPageId = null;
+  state.activePrivatePageId = null;
+  state.selected = null;
+  state.dragging = null;
+  state.panning = null;
+  state.pendingStroke = null;
+  state.pendingFog = null;
+  state.pendingPresence = null;
+  state.pendingPatches.clear();
+  els.campaignTitle.textContent = "Choose or create a campaign";
+  els.campaignMeta.textContent = "Your live map, campaign notes, and private notes will show up here.";
+  els.campaignSummaryInput.value = "";
+  window.clearTimeout(state.patchTimer);
+  state.patchTimer = null;
+  window.clearTimeout(state.presenceTimer);
+  state.presenceTimer = null;
+  window.clearTimeout(state.summaryTimer);
+  state.summaryTimer = null;
+  Object.keys(state.noteTimers).forEach(key => {
+    window.clearTimeout(state.noteTimers[key]);
+    state.noteTimers[key] = null;
+  });
+  setView("campaign");
+  renderCampaignList();
+  renderMembers();
+  renderMapList();
+  renderRosterEditor();
+  renderNotes("shared");
+  renderNotes("private");
+  renderBoard();
+  updateInspector();
+  renderOverview();
+}
+
+async function syncUserProfileDoc({ preferRemote = false } = {}) {
+  if (!state.user) return;
+
+  const userRef = doc(db, "users", state.user.uid);
+  const snap = await getDoc(userRef);
+  const existing = snap.exists() ? snap.data() : null;
+  const remoteProfile = existing?.profile || null;
+
+  if (preferRemote && remoteProfile) {
+    state.profile = {
+      name: sanitizeName(remoteProfile.name || state.user.displayName || state.profile.name) || DEFAULT_PROFILE.name,
+      color: remoteProfile.color || state.profile.color || DEFAULT_PROFILE.color
+    };
+  } else {
+    state.profile = {
+      name: sanitizeName(state.profile.name || state.user.displayName || remoteProfile?.name) || DEFAULT_PROFILE.name,
+      color: state.profile.color || remoteProfile?.color || DEFAULT_PROFILE.color
+    };
+  }
+
+  if (preferRemote && !state.activeCharacterId && existing?.activeCharacterId) {
+    state.activeCharacterId = existing.activeCharacterId;
+  }
+
+  localStorage.setItem("campaign-chronicle-profile", JSON.stringify(state.profile));
+  renderProfile();
+  renderAccountPanel();
+
+  await setDoc(userRef, {
+    email: state.user.email || null,
+    isAnonymous: !!state.user.isAnonymous,
+    profile: state.profile,
+    activeCharacterId: state.activeCharacterId || null,
+    updatedAt: Date.now()
+  }, { merge: true });
+}
+
+function watchUserData() {
+  cleanupUserDataSubs();
+  if (!state.user) {
+    return;
+  }
+
+  state.userDocUnsub = onSnapshot(doc(db, "users", state.user.uid), snapshot => {
+    const data = snapshot.exists() ? snapshot.data() : {};
+    if (data.profile) {
+      const nextProfile = {
+        name: sanitizeName(data.profile.name || state.profile.name) || DEFAULT_PROFILE.name,
+        color: data.profile.color || state.profile.color || DEFAULT_PROFILE.color
+      };
+      if (nextProfile.name !== state.profile.name || nextProfile.color !== state.profile.color) {
+        state.profile = nextProfile;
+        localStorage.setItem("campaign-chronicle-profile", JSON.stringify(state.profile));
+        renderProfile();
+        renderAccountPanel();
+        renderMembers();
+        renderRosterEditor();
+      }
+    }
+
+    if ((data.activeCharacterId || null) !== state.activeCharacterId) {
+      state.activeCharacterId = data.activeCharacterId || null;
+      renderCharacters();
+    }
+  });
+
+  state.characterUnsub = onSnapshot(
+    query(collection(db, "users", state.user.uid, "characters"), orderBy("updatedAt", "desc")),
+    snapshot => {
+      state.characters = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+      if (!state.characters.length) {
+        state.activeCharacterId = null;
+      } else if (!state.activeCharacterId || !state.characters.some(character => character.id === state.activeCharacterId)) {
+        state.activeCharacterId = state.characters[0].id;
+        syncUserProfileDoc().catch(console.error);
+      }
+
+      renderCharacters();
+    }
+  );
 }
 
 function onCampaignNameKeyDown(event) {
   if (event.key !== "Enter") return;
   event.preventDefault();
   createCampaign().catch(console.error);
+}
+
+function onAuthPasswordKeyDown(event) {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  signInFromUi().catch(console.error);
 }
 
 function onJoinCodeInput() {
@@ -233,6 +458,68 @@ function onJoinCodeKeyDown(event) {
   if (event.key !== "Enter") return;
   event.preventDefault();
   joinCampaign().catch(console.error);
+}
+
+async function createAccountFromUi() {
+  const email = els.authEmailInput.value.trim();
+  const password = els.authPasswordInput.value;
+  if (!email || !password) {
+    alert("Enter an email and password first.");
+    return;
+  }
+
+  if (password.length < 6) {
+    alert("Passwords need at least 6 characters.");
+    return;
+  }
+
+  try {
+    await createAccount(email, password, state.profile.name);
+    await syncUserProfileDoc();
+    els.authPasswordInput.value = "";
+    renderAccountPanel();
+    updateAuthControls();
+    setStatus(`Account created for ${email}`);
+  } catch (error) {
+    console.error("Failed to create account", error);
+    alert(accountAuthError(error, "Couldn't create that account."));
+  }
+}
+
+async function signInFromUi() {
+  const email = els.authEmailInput.value.trim();
+  const password = els.authPasswordInput.value;
+  if (!email || !password) {
+    alert("Enter your email and password first.");
+    return;
+  }
+
+  if (state.user?.isAnonymous && state.currentCampaignId && !confirm("Signing into an existing account will switch away from this guest profile. If you want to keep this guest's campaign access, create an account instead. Continue?")) {
+    return;
+  }
+
+  try {
+    await signInToAccount(email, password);
+    els.authPasswordInput.value = "";
+    setStatus(`Signed into ${email}`);
+  } catch (error) {
+    console.error("Failed to sign in", error);
+    alert(accountAuthError(error, "Couldn't sign into that account."));
+  }
+}
+
+async function signOutFromUi() {
+  if (!state.user || state.user.isAnonymous) return;
+  if (!confirm("Sign out of this account and continue as a guest?")) return;
+
+  try {
+    await signOutToGuest();
+    els.authPasswordInput.value = "";
+    setStatus("Signed out to guest mode.");
+  } catch (error) {
+    console.error("Failed to sign out", error);
+    alert("Couldn't sign out right now. Try again in a moment.");
+  }
 }
 
 async function requireSignedIn() {
@@ -369,6 +656,13 @@ async function joinCampaign() {
 
 function watchCampaignList() {
   state.campaignListUnsub?.();
+  if (!state.user) {
+    state.campaignListUnsub = null;
+    state.campaigns = [];
+    renderCampaignList();
+    return;
+  }
+
   state.campaignListUnsub = onSnapshot(
     query(collection(db, "users", state.user.uid, "campaigns"), orderBy("updatedAt", "desc")),
     snapshot => {
@@ -407,6 +701,7 @@ async function openCampaign(campaignId) {
     }
     renderOverview();
     renderCampaignList();
+    renderRosterEditor();
   }));
 
   state.unsubs.push(onSnapshot(
@@ -428,6 +723,7 @@ async function openCampaign(campaignId) {
   state.unsubs.push(onSnapshot(collection(db, "campaigns", campaignId, "members"), snapshot => {
     state.members = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
     renderMembers();
+    renderRosterEditor();
     renderOverview();
     renderCursors();
   }));
@@ -551,13 +847,29 @@ function renderMembers() {
   els.memberCount.textContent = String(members.length);
   els.memberList.innerHTML = members.length ? members.map(member => `
     <div class="member-card">
-      <div class="member-swatch" style="background:${escapeHtml(member.color || DEFAULT_PROFILE.color)}"></div>
-      <div class="member-copy">
-        <strong>${escapeHtml(member.name || "Unknown player")}</strong>
-        <span class="muted">${escapeHtml(member.role || "Player")} • ${isOnline(member) ? "Online" : "Away"}</span>
+      <div class="member-card-head">
+        <div class="member-swatch" style="background:${escapeHtml(member.color || DEFAULT_PROFILE.color)}"></div>
+        <div class="member-copy">
+          <strong>${escapeHtml(member.name || "Unknown player")}</strong>
+          <span class="muted">${escapeHtml(memberMeta(member))}</span>
+        </div>
       </div>
     </div>
   `).join("") : `<div class="empty-state">Player presence will show up here after someone joins.</div>`;
+}
+
+function isCampaignOwner() {
+  return !!state.currentCampaignId && state.currentCampaign?.ownerId === state.user?.uid;
+}
+
+function memberMeta(member) {
+  const bits = [];
+  if (member.title) {
+    bits.push(member.title);
+  }
+  bits.push(member.id === state.currentCampaign?.ownerId ? "DM" : (member.role || "Player"));
+  bits.push(isOnline(member) ? "Online" : "Away");
+  return bits.join(" | ");
 }
 
 function renderOverview() {
@@ -574,6 +886,7 @@ function renderViews() {
   const views = {
     campaign: els.campaignView,
     map: els.mapView,
+    characters: els.charactersView,
     "shared-notes": els.sharedNotesView,
     "private-notes": els.privateNotesView
   };
@@ -716,6 +1029,269 @@ function renderNotes(kind) {
   const page = pages.find(entry => entry.id === safeId);
   if (document.activeElement !== title) title.value = page?.title || "";
   if (document.activeElement !== body) body.value = page?.content || "";
+}
+
+function selectedCharacter() {
+  return state.characters.find(character => character.id === state.activeCharacterId) || null;
+}
+
+function renderCharacters() {
+  const character = selectedCharacter();
+  const hasUser = !!state.user;
+  const accountHint = state.user?.isAnonymous
+    ? "Guest characters stay with this profile until you create or link an account."
+    : "Character sheets autosave to your account.";
+
+  els.characterAccountHint.textContent = hasUser
+    ? accountHint
+    : "Connecting to Firebase so your character sheets can load.";
+  els.addCharacterBtn.disabled = !hasUser;
+  els.deleteCharacterBtn.disabled = !character;
+
+  if (!state.characters.length) {
+    els.characterList.innerHTML = `<div class="empty-state">Create a character sheet to track names, class, notes, and titles.</div>`;
+  } else {
+    els.characterList.innerHTML = state.characters.map(entry => {
+      const metaBits = [];
+      if (entry.title) metaBits.push(entry.title);
+      if (entry.level) metaBits.push(`Level ${entry.level}`);
+      if (entry.className) metaBits.push(entry.className);
+      if (entry.ancestry) metaBits.push(entry.ancestry);
+      return `
+        <button class="list-item ${entry.id === state.activeCharacterId ? "is-active" : ""}" data-character-id="${entry.id}">
+          <span class="list-item-title">${escapeHtml(entry.name || "Untitled character")}</span>
+          <span class="list-item-meta">${escapeHtml(metaBits.join(" | ") || "Character sheet")}</span>
+        </button>
+      `;
+    }).join("");
+
+    els.characterList.querySelectorAll("[data-character-id]").forEach(button => {
+      button.addEventListener("click", () => {
+        state.activeCharacterId = button.dataset.characterId;
+        renderCharacters();
+        syncUserProfileDoc().catch(console.error);
+      });
+    });
+  }
+
+  const inputs = [
+    els.characterNameInput,
+    els.characterTitleInput,
+    els.characterClassInput,
+    els.characterLevelInput,
+    els.characterAncestryInput,
+    els.characterNotesInput
+  ];
+
+  if (!character) {
+    inputs.forEach(input => {
+      input.disabled = true;
+      input.value = "";
+    });
+    els.characterSaveStatus.textContent = state.characters.length ? "Pick a character sheet to edit it." : "Character sheets autosave after you create one.";
+    return;
+  }
+
+  inputs.forEach(input => {
+    input.disabled = false;
+  });
+
+  if (document.activeElement !== els.characterNameInput) els.characterNameInput.value = character.name || "";
+  if (document.activeElement !== els.characterTitleInput) els.characterTitleInput.value = character.title || "";
+  if (document.activeElement !== els.characterClassInput) els.characterClassInput.value = character.className || "";
+  if (document.activeElement !== els.characterLevelInput) els.characterLevelInput.value = character.level ? String(character.level) : "";
+  if (document.activeElement !== els.characterAncestryInput) els.characterAncestryInput.value = character.ancestry || "";
+  if (document.activeElement !== els.characterNotesInput) els.characterNotesInput.value = character.notes || "";
+  if (!state.characterSaveTimer) {
+    els.characterSaveStatus.textContent = "Character sheet autosaves.";
+  }
+}
+
+function renderRosterEditor() {
+  if (!state.currentCampaignId || !state.currentCampaign) {
+    els.campaignAdminHint.textContent = "No campaign";
+    els.rosterEditor.innerHTML = `<div class="empty-state">Open a campaign to manage player titles and DM ownership.</div>`;
+    return;
+  }
+
+  const draftTitles = {};
+  els.rosterEditor.querySelectorAll("[data-title-input]").forEach(input => {
+    draftTitles[input.dataset.titleInput] = input.value;
+  });
+
+  const owner = isCampaignOwner();
+  const members = [...state.members].sort((a, b) => (b.heartbeatAt || 0) - (a.heartbeatAt || 0));
+  els.campaignAdminHint.textContent = owner ? "DM tools" : "Read only";
+  if (document.activeElement?.matches?.("[data-title-input]")) {
+    return;
+  }
+
+  if (!members.length) {
+    els.rosterEditor.innerHTML = `<div class="empty-state">Players will appear here after they join the campaign.</div>`;
+    return;
+  }
+
+  els.rosterEditor.innerHTML = members.map(member => {
+    const roleLabel = member.id === state.currentCampaign.ownerId ? "DM" : (member.role || "Player");
+    const titleValue = draftTitles[member.id] ?? member.title ?? "";
+    const adminTools = owner ? `
+      <div class="member-admin">
+        <label class="stacked-field">
+          <span>Player title</span>
+          <input data-title-input="${member.id}" value="${escapeHtml(titleValue)}" maxlength="36" placeholder="Scout captain, quartermaster, caller...">
+        </label>
+        <div class="member-admin-row">
+          <button class="secondary" data-save-title="${member.id}">Save Title</button>
+          ${member.id === state.user?.uid ? `<span class="muted">You are the current DM.</span>` : `<button class="ghost" data-transfer-owner="${member.id}">Make DM</button>`}
+        </div>
+      </div>
+    ` : `
+      <p class="muted">${escapeHtml(member.title || "No title set yet.")}</p>
+    `;
+
+    return `
+      <div class="member-card">
+        <div class="member-card-head">
+          <div class="member-swatch" style="background:${escapeHtml(member.color || DEFAULT_PROFILE.color)}"></div>
+          <div class="member-copy">
+            <strong>${escapeHtml(member.name || "Unknown player")}</strong>
+            <span class="muted">${escapeHtml(`${roleLabel} | ${isOnline(member) ? "Online" : "Away"}`)}</span>
+          </div>
+        </div>
+        ${adminTools}
+      </div>
+    `;
+  }).join("");
+
+  els.rosterEditor.querySelectorAll("[data-save-title]").forEach(button => {
+    button.addEventListener("click", () => saveMemberTitle(button.dataset.saveTitle));
+  });
+  els.rosterEditor.querySelectorAll("[data-transfer-owner]").forEach(button => {
+    button.addEventListener("click", () => transferCampaignOwnership(button.dataset.transferOwner));
+  });
+}
+
+function characterFormPayload() {
+  const rawLevel = Number(els.characterLevelInput.value);
+  return {
+    name: sanitizeName(els.characterNameInput.value) || "Untitled character",
+    title: sanitizeLabel(els.characterTitleInput.value),
+    className: sanitizeLabel(els.characterClassInput.value),
+    level: Number.isFinite(rawLevel) && rawLevel > 0 ? clamp(Math.round(rawLevel), 1, 20) : 1,
+    ancestry: sanitizeLabel(els.characterAncestryInput.value),
+    notes: els.characterNotesInput.value
+  };
+}
+
+async function createCharacter() {
+  if (!await requireSignedIn()) return;
+
+  const now = Date.now();
+  const nextNumber = state.characters.length + 1;
+  const characterRef = await addDoc(collection(db, "users", state.user.uid, "characters"), {
+    name: `New Character ${nextNumber}`,
+    title: "",
+    className: "",
+    level: 1,
+    ancestry: "",
+    notes: "",
+    createdAt: now,
+    updatedAt: now
+  });
+
+  state.activeCharacterId = characterRef.id;
+  els.characterSaveStatus.textContent = "Character sheet created.";
+  setView("characters");
+  await syncUserProfileDoc();
+}
+
+async function deleteCharacter() {
+  const character = selectedCharacter();
+  if (!character || !state.user) return;
+  if (!confirm(`Delete ${character.name || "this character"}?`)) return;
+
+  window.clearTimeout(state.characterSaveTimer);
+  state.characterSaveTimer = null;
+  const remaining = state.characters.filter(entry => entry.id !== character.id);
+  state.activeCharacterId = remaining[0]?.id || null;
+  await deleteDoc(doc(db, "users", state.user.uid, "characters", character.id));
+  els.characterSaveStatus.textContent = remaining.length ? "Character removed." : "Character deleted.";
+  await syncUserProfileDoc();
+}
+
+function scheduleCharacterSave() {
+  const character = selectedCharacter();
+  if (!character || !state.user) return;
+
+  const payload = characterFormPayload();
+  Object.assign(character, payload);
+  renderCharacters();
+  els.characterSaveStatus.textContent = "Saving...";
+  window.clearTimeout(state.characterSaveTimer);
+  state.characterSaveTimer = window.setTimeout(async () => {
+    try {
+      await updateDoc(doc(db, "users", state.user.uid, "characters", character.id), {
+        ...payload,
+        updatedAt: Date.now()
+      });
+      await setDoc(doc(db, "users", state.user.uid), {
+        activeCharacterId: character.id,
+        updatedAt: Date.now()
+      }, { merge: true });
+      els.characterSaveStatus.textContent = "Character sheet saved.";
+    } catch (error) {
+      console.error("Failed to save character", error);
+      els.characterSaveStatus.textContent = "Character save failed. Try again.";
+    } finally {
+      state.characterSaveTimer = null;
+    }
+  }, 350);
+}
+
+async function saveMemberTitle(memberId) {
+  if (!state.currentCampaignId || !isCampaignOwner()) return;
+  const input = els.rosterEditor.querySelector(`[data-title-input="${memberId}"]`);
+  if (!input) return;
+
+  const member = state.members.find(entry => entry.id === memberId);
+  const title = sanitizeLabel(input.value);
+  await setDoc(doc(db, "campaigns", state.currentCampaignId, "members", memberId), {
+    title,
+    updatedAt: Date.now()
+  }, { merge: true });
+  setStatus(title ? `Saved title for ${member?.name || "player"}` : `Cleared title for ${member?.name || "player"}`);
+}
+
+async function transferCampaignOwnership(memberId) {
+  if (!state.currentCampaignId || !isCampaignOwner() || memberId === state.user?.uid) return;
+  const member = state.members.find(entry => entry.id === memberId);
+  if (!member) return;
+  if (!confirm(`Make ${member.name || "this player"} the DM for this campaign?`)) return;
+
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(doc(db, "campaigns", state.currentCampaignId), {
+    ownerId: memberId,
+    updatedAt: now
+  });
+  batch.set(doc(db, "campaigns", state.currentCampaignId, "members", state.user.uid), {
+    role: "Player",
+    updatedAt: now
+  }, { merge: true });
+  batch.set(doc(db, "campaigns", state.currentCampaignId, "members", memberId), {
+    role: "DM",
+    updatedAt: now
+  }, { merge: true });
+  batch.set(doc(db, "users", state.user.uid, "campaigns", state.currentCampaignId), {
+    role: "Player",
+    updatedAt: now
+  }, { merge: true });
+  batch.set(doc(db, "users", memberId, "campaigns", state.currentCampaignId), {
+    role: "DM",
+    updatedAt: now
+  }, { merge: true });
+  await batch.commit();
+  setStatus(`${member.name || "Player"} is now the DM for this campaign.`);
 }
 
 function updateInspector() {
@@ -1571,8 +2147,10 @@ function saveProfile() {
   };
   localStorage.setItem("campaign-chronicle-profile", JSON.stringify(state.profile));
   renderProfile();
+  renderAccountPanel();
   setStatus(`Saved profile for ${state.profile.name}`);
   syncPresence({ heartbeat: true }).catch(console.error);
+  syncUserProfileDoc().catch(console.error);
 }
 
 function getActiveMap() {
