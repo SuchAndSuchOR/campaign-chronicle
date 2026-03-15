@@ -691,3 +691,20 @@ input[type="range"] {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+@media (max-width: 760px) and (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-shell {
+    min-height: 100dvh;
+  }
+
+  .sidebar,
+  .workspace {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
