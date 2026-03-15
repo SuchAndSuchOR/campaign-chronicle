@@ -61,7 +61,8 @@ const state = {
   campaignListUnsub: null,
   summaryTimer: null,
   noteTimers: { shared: null, private: null },
-  toolHintTimer: null
+  toolHintTimer: null,
+  boardDragDepth: 0
 };
 
 const els = {};
@@ -132,7 +133,7 @@ function cacheEls() {
     "overviewOnlineCount", "campaignOwnerLabel", "campaignSummaryInput",
     "mapUpload", "markerUpload", "uploadMapsBtn", "placePlayerMarkerBtn", "uploadMarkerBtn", "deleteSelectionBtn",
     "brushSizeInput", "drawColorInput", "zoomInput", "toggleFogBtn", "clearDrawingBtn",
-    "clearFogBtn", "mapList", "mapCount", "activeMapName", "toolHint", "boardViewport",
+    "clearFogBtn", "mapList", "mapCount", "activeMapName", "toolHint", "boardViewport", "boardDropHint",
     "boardStage", "mapBoard", "mapItemLayer", "tokenLayer", "cursorLayer", "drawCanvas",
     "fogCanvas", "selectionLabel", "inspectorEmpty", "inspectorForm", "selectedNameInput",
     "selectedSizeInput", "selectedXInput", "selectedYInput", "selectionMeta", "sizeLabel",
@@ -181,6 +182,12 @@ function bindUi() {
   els.boardViewport.addEventListener("pointerup", onBoardUp);
   els.boardViewport.addEventListener("pointerleave", onBoardUp);
   els.boardViewport.addEventListener("wheel", onBoardWheel, { passive: false });
+  els.boardViewport.addEventListener("dragenter", onBoardDragEnter);
+  els.boardViewport.addEventListener("dragover", onBoardDragOver);
+  els.boardViewport.addEventListener("dragleave", onBoardDragLeave);
+  els.boardViewport.addEventListener("drop", onBoardDrop);
+  window.addEventListener("dragover", onWindowFileDragOver);
+  window.addEventListener("drop", onWindowFileDrop);
 
   document.querySelectorAll("[data-view]").forEach(button => {
     button.addEventListener("click", () => setView(button.dataset.view));
@@ -718,6 +725,62 @@ function onBoardWheel(event) {
   applyStageTransform();
 }
 
+function onWindowFileDragOver(event) {
+  if (!extractImageFiles(event.dataTransfer).length) return;
+  event.preventDefault();
+}
+
+function onWindowFileDrop(event) {
+  if (!extractImageFiles(event.dataTransfer).length) return;
+  event.preventDefault();
+  state.boardDragDepth = 0;
+  setBoardDropActive(false);
+}
+
+function onBoardDragEnter(event) {
+  if (!extractImageFiles(event.dataTransfer).length) return;
+  event.preventDefault();
+  state.boardDragDepth += 1;
+  setBoardDropActive(true);
+}
+
+function onBoardDragOver(event) {
+  if (!extractImageFiles(event.dataTransfer).length) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+  setBoardDropActive(true);
+}
+
+function onBoardDragLeave(event) {
+  if (!extractImageFiles(event.dataTransfer).length) return;
+  event.preventDefault();
+  state.boardDragDepth = Math.max(0, state.boardDragDepth - 1);
+  if (!state.boardDragDepth) {
+    setBoardDropActive(false);
+  }
+}
+
+async function onBoardDrop(event) {
+  const files = extractImageFiles(event.dataTransfer);
+  if (!files.length) return;
+  event.preventDefault();
+  state.boardDragDepth = 0;
+  setBoardDropActive(false);
+
+  if (!state.currentCampaignId) {
+    showToolHint("Open a campaign first, then drop map images onto the board.", 2600);
+    return;
+  }
+
+  const dropPoint = boardPoint(event.clientX, event.clientY);
+  await uploadMaps(files, { dropPoint });
+  showToolHint("Map images added. Drag the new sections into place to stitch them together.", 2600);
+}
+
+function setBoardDropActive(isActive) {
+  els.boardViewport.classList.toggle("is-drop-target", isActive);
+}
+
 function onBoardDown(event) {
   if (!state.currentCampaignId || !state.currentMapId) return;
   const item = event.target.closest(".scene-item");
@@ -876,7 +939,7 @@ function setTool(tool) {
 
 function toolHintText(tool) {
   const hints = {
-    move: "Drag maps and markers around the board. Uploaded maps stay on the same scene so you can stitch them together.",
+    move: "Drag maps and markers around the board. You can also drop image files onto the board to add new map sections exactly where you want them.",
     pan: "Drag the viewport to move across larger maps.",
     draw: "Sketch directly on the active map.",
     "fog-cover": "Paint fog back over unexplored areas.",
@@ -1093,14 +1156,22 @@ function markerSpawnPoint() {
   return { x: 260, y: 260 };
 }
 
-async function uploadMaps(files) {
+function extractImageFiles(dataTransfer) {
+  if (!dataTransfer?.files?.length) {
+    return [];
+  }
+
+  return [...dataTransfer.files].filter(file => file.type.startsWith("image/"));
+}
+
+async function uploadMaps(files, { dropPoint = null } = {}) {
   if (!state.currentCampaignId) {
     alert("Open a campaign before uploading maps.");
     return;
   }
 
   const now = Date.now();
-  const start = nextMapPlacement();
+  const start = dropPoint || nextMapPlacement();
   let nextX = start.x;
   for (const [index, file] of files.entries()) {
     const meta = await readImageMeta(file);
@@ -1110,20 +1181,23 @@ async function uploadMaps(files) {
     const imageUrl = await getDownloadURL(fileRef);
     const width = clamp(meta.width, 800, 1800);
     const aspectRatio = meta.width / meta.height;
+    const height = Math.round(width / aspectRatio);
+    const x = Math.max(40, Math.round(index === 0 && dropPoint ? start.x - (width / 2) : nextX));
+    const y = Math.max(40, Math.round(index === 0 && dropPoint ? start.y - (height / 2) : start.y + ((index % 2) * 36)));
     await addDoc(collection(db, "campaigns", state.currentCampaignId, "maps"), {
       name: fileBaseName(file.name),
       imageUrl,
       storagePath,
-      x: nextX,
-      y: start.y + ((index % 2) * 36),
+      x,
+      y,
       width,
-      height: Math.round(width / aspectRatio),
+      height,
       aspectRatio,
       fogEnabled: false,
       createdAt: now + index,
       updatedAt: now + index
     });
-    nextX += width + 80;
+    nextX = x + width + 80;
   }
 
   els.mapUpload.value = "";
