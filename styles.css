@@ -523,6 +523,7 @@ textarea {
 
 .scene-item.map-item {
   border: 1px solid rgba(255, 248, 235, 0.12);
+  transform-origin: center center;
 }
 
 .scene-item.map-item.is-active-map {
@@ -615,6 +616,10 @@ textarea {
 .inspector-form {
   display: grid;
   gap: 0.8rem;
+}
+
+.number-row {
+  flex-wrap: wrap;
 }
 
 input[type="range"] {

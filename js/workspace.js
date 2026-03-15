@@ -163,7 +163,8 @@ function cacheEls() {
     "clearFogBtn", "mapList", "mapCount", "activeMapName", "toolHint", "boardViewport", "boardDropHint",
     "boardStage", "mapBoard", "mapItemLayer", "tokenLayer", "cursorLayer", "drawCanvas",
     "fogCanvas", "selectionLabel", "inspectorEmpty", "inspectorForm", "selectedNameInput",
-    "selectedSizeInput", "selectedXInput", "selectedYInput", "selectionMeta", "sizeLabel",
+    "selectedSizeInput", "selectedXInput", "selectedYInput", "selectedRotationField", "selectedRotationInput",
+    "selectionMeta", "sizeLabel",
     "characterList", "characterAccountHint", "addCharacterBtn", "deleteCharacterBtn",
     "characterNameInput", "characterTitleInput", "characterClassInput", "characterLevelInput",
     "characterAncestryInput", "characterNotesInput", "characterSaveStatus",
@@ -219,6 +220,7 @@ function bindUi() {
   els.selectedSizeInput.addEventListener("input", syncInspectorSelection);
   els.selectedXInput.addEventListener("change", syncInspectorSelection);
   els.selectedYInput.addEventListener("change", syncInspectorSelection);
+  els.selectedRotationInput.addEventListener("change", syncInspectorSelection);
   els.boardViewport.addEventListener("pointerdown", onBoardDown);
   els.boardViewport.addEventListener("pointermove", onBoardMove);
   els.boardViewport.addEventListener("pointerup", onBoardUp);
@@ -929,7 +931,7 @@ function renderBoard() {
   resizeCanvas(els.fogCanvas, size);
 
   els.mapItemLayer.innerHTML = state.maps.map(map => `
-    <div class="scene-item map-item ${isSelected("map", map.id) ? "is-selected" : ""} ${map.id === state.currentMapId ? "is-active-map" : ""}" data-kind="map" data-id="${map.id}" style="left:${map.x}px;top:${map.y}px;width:${map.width}px;height:${map.height}px;">
+    <div class="scene-item map-item ${isSelected("map", map.id) ? "is-selected" : ""} ${map.id === state.currentMapId ? "is-active-map" : ""}" data-kind="map" data-id="${map.id}" style="left:${map.x}px;top:${map.y}px;width:${map.width}px;height:${map.height}px;transform:rotate(${normalizeRotation(map.rotation || 0)}deg);">
       <img src="${escapeHtml(map.imageUrl)}" alt="${escapeHtml(map.name)}">
       <canvas class="map-overlay map-draw-layer"></canvas>
       <canvas class="map-overlay map-fog-layer"></canvas>
@@ -1300,6 +1302,8 @@ function updateInspector() {
     els.selectionLabel.textContent = "Nothing selected";
     els.inspectorEmpty.classList.remove("hidden");
     els.inspectorForm.classList.add("hidden");
+    els.selectedRotationField.classList.add("hidden");
+    els.selectedRotationInput.disabled = true;
     return;
   }
 
@@ -1307,6 +1311,8 @@ function updateInspector() {
   els.selectionLabel.textContent = isMap ? "Map selected" : "Marker selected";
   els.inspectorEmpty.classList.add("hidden");
   els.inspectorForm.classList.remove("hidden");
+  els.selectedRotationField.classList.toggle("hidden", !isMap);
+  els.selectedRotationInput.disabled = !isMap;
   els.selectedNameInput.value = entity.name || "";
   els.selectedXInput.value = String(Math.round(entity.x || 0));
   els.selectedYInput.value = String(Math.round(entity.y || 0));
@@ -1314,8 +1320,13 @@ function updateInspector() {
   els.selectedSizeInput.min = String(isMap ? MAP_MIN : TOKEN_MIN);
   els.selectedSizeInput.max = String(isMap ? MAP_MAX : TOKEN_MAX);
   els.selectedSizeInput.value = String(Math.round(isMap ? entity.width : entity.size));
+  if (isMap) {
+    els.selectedRotationInput.value = String(normalizeRotation(entity.rotation || 0));
+  } else {
+    els.selectedRotationInput.value = "0";
+  }
   els.selectionMeta.textContent = isMap
-    ? `Height follows the original ratio. Current height: ${Math.round(entity.height)}px`
+    ? `Height follows the original ratio. Current height: ${Math.round(entity.height)}px. Rotation: ${normalizeRotation(entity.rotation || 0)} deg.`
     : `Marker size: ${Math.round(entity.size)}px`;
 }
 
@@ -1331,7 +1342,8 @@ function syncInspectorSelection() {
       x: Number(els.selectedXInput.value) || 0,
       y: Number(els.selectedYInput.value) || 0,
       width,
-      height: Math.round(width / aspectRatio)
+      height: Math.round(width / aspectRatio),
+      rotation: normalizeRotation(els.selectedRotationInput.value)
     });
     return;
   }
@@ -1708,19 +1720,66 @@ function findMapById(mapId) {
   return state.maps.find(map => map.id === mapId) || null;
 }
 
+function normalizeRotation(value) {
+  let angle = Math.round(Number(value) || 0);
+  while (angle > 180) angle -= 360;
+  while (angle < -180) angle += 360;
+  return angle;
+}
+
+function pointToMapLocal(point, map) {
+  const width = Number(map.width) || 0;
+  const height = Number(map.height) || 0;
+  const centerX = (Number(map.x) || 0) + (width / 2);
+  const centerY = (Number(map.y) || 0) + (height / 2);
+  const radians = normalizeRotation(map.rotation || 0) * (Math.PI / 180);
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const deltaX = point.x - centerX;
+  const deltaY = point.y - centerY;
+  return {
+    x: (deltaX * cos) + (deltaY * sin) + (width / 2),
+    y: (-deltaX * sin) + (deltaY * cos) + (height / 2)
+  };
+}
+
+function pointInsideMap(point, map) {
+  const localPoint = pointToMapLocal(point, map);
+  return localPoint.x >= 0 &&
+    localPoint.x <= map.width &&
+    localPoint.y >= 0 &&
+    localPoint.y <= map.height;
+}
+
+function rotatedMapBounds(map) {
+  const width = Number(map.width) || 0;
+  const height = Number(map.height) || 0;
+  const radians = normalizeRotation(map.rotation || 0) * (Math.PI / 180);
+  const cos = Math.abs(Math.cos(radians));
+  const sin = Math.abs(Math.sin(radians));
+  const rotatedWidth = (width * cos) + (height * sin);
+  const rotatedHeight = (width * sin) + (height * cos);
+  const centerX = (Number(map.x) || 0) + (width / 2);
+  const centerY = (Number(map.y) || 0) + (height / 2);
+  return {
+    left: centerX - (rotatedWidth / 2),
+    top: centerY - (rotatedHeight / 2),
+    right: centerX + (rotatedWidth / 2),
+    bottom: centerY + (rotatedHeight / 2)
+  };
+}
+
 function mapAtBoardPoint(point) {
   return [...state.maps].reverse().find(map => {
-    return point.x >= map.x &&
-      point.x <= map.x + map.width &&
-      point.y >= map.y &&
-      point.y <= map.y + map.height;
+    return pointInsideMap(point, map);
   }) || null;
 }
 
 function boardPointToMapPoint(point, map) {
+  const localPoint = pointToMapLocal(point, map);
   return {
-    x: clamp(Math.round(point.x - map.x), 0, Math.round(map.width)),
-    y: clamp(Math.round(point.y - map.y), 0, Math.round(map.height))
+    x: clamp(Math.round(localPoint.x), 0, Math.round(map.width)),
+    y: clamp(Math.round(localPoint.y), 0, Math.round(map.height))
   };
 }
 
@@ -1746,8 +1805,9 @@ function boardSize() {
   let width = 2200;
   let height = 1400;
   state.maps.forEach(map => {
-    width = Math.max(width, map.x + map.width + 240);
-    height = Math.max(height, map.y + map.height + 240);
+    const bounds = rotatedMapBounds(map);
+    width = Math.max(width, bounds.right + 240);
+    height = Math.max(height, bounds.bottom + 240);
   });
   state.tokens.forEach(token => {
     width = Math.max(width, token.x + token.size + 180);
@@ -1905,6 +1965,7 @@ async function uploadMaps(files, { dropPoint = null } = {}) {
       width,
       height,
       aspectRatio,
+      rotation: 0,
       fogEnabled: false,
       createdAt: now + index,
       updatedAt: now + index
