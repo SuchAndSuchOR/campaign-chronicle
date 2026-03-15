@@ -58,6 +58,7 @@ const state = {
   presenceTimer: null,
   unsubs: [],
   mapUnsubs: [],
+  overlayWatchKey: "",
   campaignListUnsub: null,
   summaryTimer: null,
   noteTimers: { shared: null, private: null },
@@ -417,6 +418,7 @@ async function openCampaign(campaignId) {
         resetBoardView();
         watchCurrentMap();
       }
+      watchMapOverlays();
       renderMapList();
       renderBoard();
       renderOverview();
@@ -479,22 +481,51 @@ async function ensureMembership(campaignId) {
 }
 
 function watchCurrentMap() {
-  cleanupMapSubs();
   if (!state.currentCampaignId || !state.currentMapId) {
     renderBoard();
+    renderOverlays();
+    return;
+  }
+  syncPresence({ heartbeat: true }).catch(console.error);
+}
+
+function watchMapOverlays() {
+  const watchKey = state.maps.map(map => map.id).sort().join("|");
+  if (watchKey === state.overlayWatchKey) {
     return;
   }
 
-  const path = ["campaigns", state.currentCampaignId, "maps", state.currentMapId];
-  state.mapUnsubs.push(onSnapshot(query(collection(db, ...path, "drawings"), orderBy("createdAt", "asc")), snapshot => {
-    state.drawings = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+  cleanupMapSubs();
+  state.overlayWatchKey = watchKey;
+
+  if (!state.currentCampaignId || !state.maps.length) {
     renderOverlays();
-  }));
-  state.mapUnsubs.push(onSnapshot(query(collection(db, ...path, "fogActions"), orderBy("createdAt", "asc")), snapshot => {
-    state.fogActions = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
-    renderOverlays();
-  }));
-  syncPresence({ heartbeat: true }).catch(console.error);
+    return;
+  }
+
+  state.maps.forEach(map => {
+    const path = ["campaigns", state.currentCampaignId, "maps", map.id];
+
+    state.mapUnsubs.push(onSnapshot(
+      query(collection(db, ...path, "drawings"), orderBy("createdAt", "asc")),
+      snapshot => {
+        state.drawings = state.drawings
+          .filter(entry => entry.mapId !== map.id)
+          .concat(snapshot.docs.map(docSnap => ({ id: docSnap.id, mapId: map.id, ...docSnap.data() })));
+        renderOverlays();
+      }
+    ));
+
+    state.mapUnsubs.push(onSnapshot(
+      query(collection(db, ...path, "fogActions"), orderBy("createdAt", "asc")),
+      snapshot => {
+        state.fogActions = state.fogActions
+          .filter(entry => entry.mapId !== map.id)
+          .concat(snapshot.docs.map(docSnap => ({ id: docSnap.id, mapId: map.id, ...docSnap.data() })));
+        renderOverlays();
+      }
+    ));
+  });
 }
 
 function renderCampaignList() {
@@ -587,6 +618,8 @@ function renderBoard() {
   els.mapItemLayer.innerHTML = state.maps.map(map => `
     <div class="scene-item map-item ${isSelected("map", map.id) ? "is-selected" : ""} ${map.id === state.currentMapId ? "is-active-map" : ""}" data-kind="map" data-id="${map.id}" style="left:${map.x}px;top:${map.y}px;width:${map.width}px;height:${map.height}px;">
       <img src="${escapeHtml(map.imageUrl)}" alt="${escapeHtml(map.name)}">
+      <canvas class="map-overlay map-draw-layer"></canvas>
+      <canvas class="map-overlay map-fog-layer"></canvas>
       <div class="scene-tag">${escapeHtml(map.id === state.currentMapId ? `${map.name} - active` : map.name)}</div>
     </div>
   `).join("");
@@ -618,21 +651,33 @@ function renderCursors() {
 }
 
 function renderOverlays() {
-  const activeMap = getActiveMap();
-  const drawCtx = els.drawCanvas.getContext("2d");
-  drawCtx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
-  if (activeMap) {
-    [...state.drawings, ...(state.pendingStroke ? [state.pendingStroke] : [])].forEach(stroke => {
-      drawPath(drawCtx, stroke, stroke.color || "#f97316", activeMap);
-    });
-  }
+  const boardDrawCtx = els.drawCanvas.getContext("2d");
+  const boardFogCtx = els.fogCanvas.getContext("2d");
+  boardDrawCtx.clearRect(0, 0, els.drawCanvas.width, els.drawCanvas.height);
+  boardFogCtx.clearRect(0, 0, els.fogCanvas.width, els.fogCanvas.height);
 
-  const fogCtx = els.fogCanvas.getContext("2d");
-  fogCtx.clearRect(0, 0, els.fogCanvas.width, els.fogCanvas.height);
-  if (!activeMap?.fogEnabled) return;
-  fogCtx.fillStyle = "rgba(8, 10, 14, 0.86)";
-  fogCtx.fillRect(activeMap.x, activeMap.y, activeMap.width, activeMap.height);
-  [...state.fogActions, ...(state.pendingFog ? [state.pendingFog] : [])].forEach(action => drawFogAction(fogCtx, action, activeMap));
+  state.maps.forEach(map => {
+    const mapNode = els.mapItemLayer.querySelector(`[data-kind="map"][data-id="${map.id}"]`);
+    if (!mapNode) return;
+
+    const drawCanvas = mapNode.querySelector(".map-draw-layer");
+    const fogCanvas = mapNode.querySelector(".map-fog-layer");
+    resizeLocalOverlayCanvas(drawCanvas, map);
+    resizeLocalOverlayCanvas(fogCanvas, map);
+
+    const drawCtx = drawCanvas.getContext("2d");
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    [...state.drawings.filter(entry => entry.mapId === map.id), ...(state.pendingStroke?.mapId === map.id ? [state.pendingStroke] : [])]
+      .forEach(stroke => drawPath(drawCtx, stroke, stroke.color || "#f97316", map));
+
+    const fogCtx = fogCanvas.getContext("2d");
+    fogCtx.clearRect(0, 0, fogCanvas.width, fogCanvas.height);
+    if (!map.fogEnabled) return;
+    fogCtx.fillStyle = "rgba(8, 10, 14, 0.86)";
+    fogCtx.fillRect(0, 0, fogCanvas.width, fogCanvas.height);
+    [...state.fogActions.filter(entry => entry.mapId === map.id), ...(state.pendingFog?.mapId === map.id ? [state.pendingFog] : [])]
+      .forEach(action => drawFogAction(fogCtx, action, map));
+  });
 }
 
 function renderNotes(kind) {
@@ -1106,18 +1151,18 @@ function boardPointToMapPoint(point, map) {
 function overlayPointsForRender(entry, map) {
   const points = entry.points || [];
   if (entry.coordinateSpace !== "map") {
-    return points;
+    return points.map(point => ({
+      x: Math.round(point.x - map.x),
+      y: Math.round(point.y - map.y)
+    }));
   }
 
-  return points.map(point => ({
-    x: Math.round(map.x + point.x),
-    y: Math.round(map.y + point.y)
-  }));
+  return points;
 }
 
 function clipToMap(ctx, map) {
   ctx.beginPath();
-  ctx.rect(map.x, map.y, map.width, map.height);
+  ctx.rect(0, 0, map.width, map.height);
   ctx.clip();
 }
 
@@ -1151,6 +1196,14 @@ function resizeCanvas(canvas, size) {
   canvas.height = size.height;
   canvas.style.width = `${size.width}px`;
   canvas.style.height = `${size.height}px`;
+}
+
+function resizeLocalOverlayCanvas(canvas, map) {
+  if (!canvas) return;
+  const width = Math.max(1, Math.round(map.width));
+  const height = Math.max(1, Math.round(map.height));
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
 }
 
 function drawPath(ctx, stroke, color, map = null) {
@@ -1377,7 +1430,8 @@ async function toggleFog() {
 
 async function clearOverlayCollection(kind) {
   if (!state.currentCampaignId || !state.currentMapId) return;
-  const docs = kind === "drawings" ? state.drawings : state.fogActions;
+  const docs = (kind === "drawings" ? state.drawings : state.fogActions)
+    .filter(entry => entry.mapId === state.currentMapId);
   if (!docs.length) return;
   const label = kind === "drawings" ? "drawing" : "fog changes";
   if (!confirm(`Clear all ${label} from this map?`)) return;
@@ -1505,8 +1559,9 @@ async function syncPresence({ cursor = null, heartbeat = false } = {}) {
 }
 
 async function addOverlayDoc(kind, payload) {
-  if (!state.currentCampaignId || !state.currentMapId) return;
-  await addDoc(collection(db, "campaigns", state.currentCampaignId, "maps", state.currentMapId, kind), payload);
+  const mapId = payload.mapId || state.currentMapId;
+  if (!state.currentCampaignId || !mapId) return;
+  await addDoc(collection(db, "campaigns", state.currentCampaignId, "maps", mapId, kind), payload);
 }
 
 function saveProfile() {
@@ -1542,6 +1597,7 @@ function cleanupCampaignSubs() {
 function cleanupMapSubs() {
   state.mapUnsubs.forEach(unsub => unsub());
   state.mapUnsubs = [];
+  state.overlayWatchKey = "";
   state.drawings = [];
   state.fogActions = [];
 }
